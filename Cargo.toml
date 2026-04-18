@@ -1,0 +1,22 @@
+[package]
+edition = "2024"
+name = "darwin"
+version = "0.0.12"
+description = "Domain agnostic genetic algorithm implementation."
+license = "MIT"
+repository = "https://github.com/your-username/darwin"
+readme = "readme.md"
+keywords = ["genetic-algorithm", "evolutionary", "optimization"]
+categories = ["algorithms", "science"]
+
+[dependencies]
+itertools = "0.14.0" # Itertools library.
+rand = "0.10.1" # Randomness.
+rand_distr = "0.6.0" # Normal distribution.
+rayon = "1.12.0" # Parallel iterators.
+rustc-hash = "2.1.2" # Fast hash map.
+serde = {version = "1.0.228", features = ["derive"]}# Serialization and deserialization.
+
+[dev-dependencies]
+serde_json = "1.0.149" # Json support.
+spectral = "0.6.0" # Fluent assertions.
