@@ -1,27 +1,37 @@
-use crate::{Gene, GeneRanges, GeneRangesRef, Genome, GenomeRef};
+﻿use crate::{Gene, GeneRanges, GeneRangesRef, Genome, GenomeRef};
 use rand::RngExt;
 use rand_distr::{Distribution, Normal};
 use std::iter;
+
+/// Context passed to [`Evolver`] methods on each mutation / crossover call.
+/// Carries GA-level signals an evolver may use to tune its behaviour.
+/// All pressure values are normalised to `[0.0, 1.0]`.
+#[derive(Debug, Clone, Copy)]
+pub struct Context {
+    /// Current generation number.
+    pub generation: usize,
+
+    /// Pool gene diversity: `0.0` = fully converged, `1.0` = maximally diverse.
+    pub diversity: f32,
+
+    /// Stagnation pressure: `0.0` = still improving, `1.0` = fully stagnated.
+    pub stagnation: f32,
+}
 
 /// Trait for pluggable genome operation strategies.
 ///
 /// Implementations must be `Send + Sync` so a single instance can be shared
 /// across Rayon threads without cloning or locking.
 pub trait Evolver: Send + Sync {
-    /// Generate a fully random genome within the configured gene ranges.
+    /// Generate a fully random genome.
     fn random(&self) -> Genome;
 
     /// Return a mutated copy of `genome`, or `None` if the mutant falls outside range.
-    ///
-    /// - `generation`   — current generation number; used to derive mutation magnitude.
-    /// - `noise_factor` — per-pool scaling driven by diversity / stagnation; pass `1.0` to ignore.
-    fn mutant(&self, genome: GenomeRef, generation: usize, noise_factor: f32) -> Option<Genome>;
+    fn mutant(&self, genome: GenomeRef, ctx: &Context) -> Option<Genome>;
 
     /// Produce offspring by crossing two parent genomes.
-    ///
-    /// `generation` is the current generation number; implementations may use it
-    /// to scale mutation applied to the child. Returns one or more child genomes.
-    fn cross(&self, dad: GenomeRef, mom: GenomeRef, generation: usize) -> Vec<Genome>;
+    /// Returns one or more child genomes.
+    fn cross(&self, dad: GenomeRef, mom: GenomeRef, ctx: &Context) -> Vec<Genome>;
 }
 
 /// Built-in evolution engine.
@@ -88,9 +98,11 @@ impl Evolver for Evolution {
 
     /// Return a *mutated copy* of the given genome.
     /// Mutants that fall outside the allowed range are discarded (returns `None`).
-    fn mutant(&self, genome: GenomeRef, generation: usize, noise_factor: f32) -> Option<Genome> {
+    fn mutant(&self, genome: GenomeRef, ctx: &Context) -> Option<Genome> {
         let mut rng = rand::rng();
-        let sigma = self.sigma(generation);
+        let sigma = self.sigma(ctx.generation);
+        // High diversity -> lower noise (exploit). High stagnation -> higher noise (explore).
+        let noise_factor = (1.0 - ctx.diversity) + ctx.stagnation * ctx.diversity;
         // μ (mean) is 0 so shifts can go left or right.
         let normal = Normal::new(0.0_f32, sigma).expect("`sigma` should be valid.");
         genome
@@ -119,7 +131,7 @@ impl Evolver for Evolution {
     /// For each group in `self.groups`, copy that contiguous chunk from one of the
     /// parents (50 / 50), preserving group boundaries.
     /// Returns `[maybe_mutant, pure_child]` — mutant first if produced.
-    fn cross(&self, dad: GenomeRef, mom: GenomeRef, generation: usize) -> Vec<Genome> {
+    fn cross(&self, dad: GenomeRef, mom: GenomeRef, ctx: &Context) -> Vec<Genome> {
         debug_assert_eq!(dad.len(), mom.len(), "parents must be same length");
         debug_assert_eq!(
             self.groups.iter().sum::<usize>(),
@@ -146,7 +158,12 @@ impl Evolver for Evolution {
                 child.extend_from_slice(src);
             });
 
-        self.mutant(&child, generation, self.cross_noise_factor)
+        // Cross-noise: use a reduced stagnation so crossover children mutate gently.
+        let cross_ctx = Context {
+            stagnation: self.cross_noise_factor,
+            ..*ctx
+        };
+        self.mutant(&child, &cross_ctx)
             .into_iter()
             .chain(iter::once(child))
             .collect()
@@ -164,7 +181,11 @@ mod tests {
         let mom = evolver.random();
         let dad = evolver.random();
 
-        let children = evolver.cross(&dad, &mom, 0);
+        let children = evolver.cross(
+            &dad,
+            &mom,
+            &Context { generation: 0, diversity: 0.5, stagnation: 0.0 },
+        );
         let child = &children[1];
 
         let bounds: Vec<(usize, usize)> = groups

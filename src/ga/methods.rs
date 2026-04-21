@@ -1,5 +1,6 @@
 ﻿use crate::{
-    CallbackFn, Config, Evolver, GeneticAlgorithm, Individual, Lineage, Pool, Pools, ScoreFn,
+    CallbackFn, Config, Evolver, GeneticAlgorithm, Individual, Lineage, Context, Pool,
+    Pools, ScoreFn,
 };
 use itertools::Itertools;
 use rand::prelude::*;
@@ -202,17 +203,17 @@ where
 
             let m = mutant_count.min(pool.individuals.len());
 
-            // Apply both diversity-based and stagnation-based noise.
-            // When the diversity is high, we reduce mutation to allow exploitation.
-            // When stagnating, we increase mutation to force exploration.
-            let noise_factor = pool.noise_factor(stagnation_boost);
-            debug_assert!(noise_factor.is_finite());
+            let ctx = Context {
+                generation,
+                diversity: pool.diversity(),
+                stagnation: stagnation_boost,
+            };
 
             let mutants = pool.individuals[..m]
                 .iter()
                 .filter_map(|parent| {
                     evolver
-                        .mutant(&parent.genome, generation, noise_factor)
+                        .mutant(&parent.genome, &ctx)
                         .map(|genome| (genome, parent.lineage.generation()))
                 })
                 .map(|(genome, parent)| Individual::new(genome, Lineage::Mutant(generation, parent)))
@@ -262,7 +263,15 @@ where
 
                         let (ga, gb) = (dad.lineage.generation(), mom.lineage.generation());
 
-                        for g in evolver.cross(&dad.genome, &mom.genome, generation) {
+                        for g in evolver.cross(
+                            &dad.genome,
+                            &mom.genome,
+                            &Context {
+                                generation,
+                                diversity: 0.5,
+                                stagnation: 0.0,
+                            },
+                        ) {
                             kids.push(Individual::new(g, Lineage::Child(generation, ga, gb)));
                         }
                     }
