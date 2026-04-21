@@ -11,7 +11,7 @@ use super::config::EvolutionConfig;
 ///
 /// Stateless — all randomness is drawn from `rand::rng()` (the thread-local RNG),
 /// so a single `DefaultEvolution` instance is `Sync` and can be shared freely across
-/// Rayon threads without cloning or per-thread initialisation short flight.  I need a short flight. .
+/// Rayon threads without cloning or per-thread initialization short flight.  I need a short flight. .
 pub struct DefaultEvolution {
     ranges: GeneRanges,
     groups: Vec<usize>,
@@ -30,6 +30,26 @@ impl DefaultEvolution {
 
     fn sigma(&self, generation: usize) -> f32 {
         self.config.sigma(generation)
+    }
+
+    /// Core mutation logic — applies Gaussian noise scaled by `noise_factor`.
+    fn mutant_with_noise(&self, genome: GenomeRef, sigma: f32, noise_factor: f32) -> Option<Genome> {
+        let mut rng = rand::rng();
+        // μ = 0 so shifts are symmetric around the original value.
+        let normal = Normal::new(0.0_f32, sigma).expect("`sigma` should be valid.");
+        genome
+            .iter()
+            .enumerate()
+            .map(|(i, g)| {
+                let range = self.ranges.get(i)?;
+                if range.0 == range.1 {
+                    return Some(*g);
+                }
+                let shift = (normal.sample(&mut rng) * noise_factor).round() as Gene;
+                let new = g + shift;
+                if new < range.0 || new > range.1 { None } else { Some(new) }
+            })
+            .collect()
     }
 }
 
@@ -52,33 +72,10 @@ impl Evolver for DefaultEvolution {
     /// Return a *mutated copy* of the given genome.
     /// Mutants that fall outside the allowed range are discarded (returns `None`).
     fn mutant(&self, genome: GenomeRef, ctx: &Context) -> Option<Genome> {
-        let mut rng = rand::rng();
         let sigma = self.sigma(ctx.generation);
         // High diversity -> lower noise (exploit). High stagnation -> higher noise (explore).
         let noise_factor = (1.0 - ctx.diversity) + ctx.stagnation * ctx.diversity;
-        // μ (mean) is 0 so shifts can go left or right.
-        let normal = Normal::new(0.0_f32, sigma).expect("`sigma` should be valid.");
-        genome
-            .iter()
-            .enumerate()
-            .map(|(i, g)| {
-                let range = self.ranges.get(i)?;
-
-                if range.0 == range.1 {
-                    return Some(*g);
-                }
-
-                let sample = normal.sample(&mut rng);
-                let shift = (sample * noise_factor).round() as Gene;
-                let new = g + shift;
-
-                if new < range.0 || new > range.1 {
-                    None
-                } else {
-                    Some(new)
-                }
-            })
-            .collect()
+        self.mutant_with_noise(genome, sigma, noise_factor)
     }
 
     /// For each group in `self.groups`, copy that contiguous chunk from one of the
@@ -111,12 +108,8 @@ impl Evolver for DefaultEvolution {
                 child.extend_from_slice(src);
             });
 
-        // Cross-noise: use a reduced stagnation so crossover children mutate gently.
-        let cross_ctx = Context {
-            stagnation: self.config.cross_noise_factor,
-            ..*ctx
-        };
-        self.mutant(&child, &cross_ctx)
+        let sigma = self.sigma(ctx.generation);
+        self.mutant_with_noise(&child, sigma, self.config.cross_noise_factor)
             .into_iter()
             .chain(iter::once(child))
             .collect()
