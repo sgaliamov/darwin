@@ -51,7 +51,7 @@ impl DefaultEvolution {
 
 impl Evolver for DefaultEvolution {
     /// Create a random genome.
-    fn random(&self) -> Genome {
+    fn generate(&self) -> Genome {
         let mut rng = rand::rng();
         self.ranges
             .iter()
@@ -124,7 +124,7 @@ mod tests {
         let ranges: Vec<_> = vec![(0, 9), (10, 19), (100, 200)];
         let evo = make_evo(&ranges);
         for _ in 0..100 {
-            let g = evo.random();
+            let g = evo.generate();
             for (gene, &(lo, hi)) in g.iter().zip(ranges.iter()) {
                 assert!(*gene >= lo && *gene <= hi, "gene {gene} out of [{lo},{hi}]");
             }
@@ -174,8 +174,8 @@ mod tests {
             &groups,
             DefaultEvolutionConfig::default(),
         );
-        let mom = evolver.random();
-        let dad = evolver.random();
+        let mom = evolver.generate();
+        let dad = evolver.generate();
 
         let children = evolver.cross(
             &dad,

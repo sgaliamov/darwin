@@ -7,7 +7,7 @@ use super::context::Context;
 /// across Rayon threads without cloning or locking.
 pub trait Evolver: Send + Sync {
     /// Generate a fully random genome.
-    fn random(&self) -> Genome;
+    fn generate(&self) -> Genome;
 
     /// Return a mutated copy of `genome`, or `None` if the mutant falls outside range.
     fn mutant(&self, genome: GenomeRef, ctx: &Context) -> Option<Genome>;

@@ -145,7 +145,7 @@ mod tests {
         let evo = DefaultEvolution::new(ranges, &[100], DefaultEvolutionConfig::default());
 
         let individuals = (0..100)
-            .map(|_| Individual::<()>::firstborn(0, evo.random()))
+            .map(|_| Individual::<()>::firstborn(0, evo.generate()))
             .collect_vec();
 
         let mut pool = Pool::new(0, individuals);
@@ -341,8 +341,8 @@ mod tests {
     fn test_remove_duplicates() {
         let ranges = &[(0, 1_000); 10];
         let evo = DefaultEvolution::new(ranges, &[10], DefaultEvolutionConfig::default());
-        let i1 = Individual::firstborn(0, evo.random());
-        let i2 = Individual::firstborn(0, evo.random());
+        let i1 = Individual::firstborn(0, evo.generate());
+        let i2 = Individual::firstborn(0, evo.generate());
         let i3 = Individual::new(i2.genome.clone(), i2.lineage.clone());
 
         let mut pool = Pool::<()>::new(0, vec![i1, i2, i3]);
@@ -355,7 +355,7 @@ mod tests {
     fn test_deduplication_keeps_with_fitness() {
         let ranges = &[(0, 1_000); 10];
         let evo = DefaultEvolution::new(ranges, &[10], DefaultEvolutionConfig::default());
-        let i1 = Individual::firstborn(0, evo.random());
+        let i1 = Individual::firstborn(0, evo.generate());
         let mut i2 = Individual::<()>::new(i1.genome.clone(), i1.lineage.clone());
         i2.fitness = 1.0;
         let mut pool = Pool::new(0, vec![i1, i2]);

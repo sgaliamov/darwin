@@ -318,7 +318,7 @@ where
 
             pool.individuals.extend(
                 std::iter::repeat_with(|| {
-                    let genome = evolver.random();
+                    let genome = evolver.generate();
                     Individual::firstborn(generation, genome)
                 })
                 .take(count),
