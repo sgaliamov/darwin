@@ -8,9 +8,6 @@ pub struct DefaultEvolutionConfig {
     /// Floor for annealed sigma — prevents mutation from freezing completely.
     pub min_mutation_sigma: f32,
 
-    /// Relative noise factor applied to offspring after crossover.
-    pub cross_noise_factor: f32,
-
     /// Total number of generations; used to compute the annealing step.
     pub max_generation: usize,
 }
@@ -33,7 +30,6 @@ impl Default for DefaultEvolutionConfig {
         Self {
             max_mutation_sigma: 3.0,
             min_mutation_sigma: 1.0,
-            cross_noise_factor: 1.0,
             max_generation: 999,
         }
     }

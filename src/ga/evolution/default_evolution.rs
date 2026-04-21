@@ -28,10 +28,10 @@ impl DefaultEvolution {
         }
     }
 
-    /// Core mutation logic — applies Gaussian noise scaled by `noise_factor`.
-    fn mutant_with_noise(&self, genome: GenomeRef, generation: usize, noise_factor: f32, rng: &mut impl rand::Rng) -> Option<Genome> {
+    /// Core mutation logic — applies Gaussian noise derived from `ctx`.
+    fn mutant_with_noise(&self, genome: GenomeRef, ctx: &Context, noise_factor: f32, rng: &mut impl rand::Rng) -> Option<Genome> {
         // μ = 0 so shifts are symmetric around the original value.
-        let normal = Normal::new(0.0_f32, self.config.sigma(generation)).expect("`sigma` should be valid.");
+        let normal = Normal::new(0.0_f32, self.config.sigma(ctx.generation)).expect("`sigma` should be valid.");
         genome
             .iter()
             .enumerate()
@@ -46,6 +46,7 @@ impl DefaultEvolution {
             })
             .collect()
     }
+
 }
 
 impl Evolver for DefaultEvolution {
@@ -67,9 +68,7 @@ impl Evolver for DefaultEvolution {
     /// Return a *mutated copy* of the given genome.
     /// Mutants that fall outside the allowed range are discarded (returns `None`).
     fn mutant(&self, genome: GenomeRef, ctx: &Context) -> Option<Genome> {
-        // High diversity -> lower noise (exploit). High stagnation -> higher noise (explore).
-        let noise_factor = (1.0 - ctx.diversity) + ctx.stagnation * ctx.diversity;
-        self.mutant_with_noise(genome, ctx.generation, noise_factor, &mut rand::rng())
+        self.mutant_with_noise(genome, ctx, ctx.noise_factor(), &mut rand::rng())
     }
 
     /// For each group in `self.groups`, copy that contiguous chunk from one of the
@@ -102,7 +101,7 @@ impl Evolver for DefaultEvolution {
                 child.extend_from_slice(src);
             });
 
-        self.mutant_with_noise(&child, ctx.generation, self.config.cross_noise_factor, &mut rng)
+        self.mutant_with_noise(&child, ctx, ctx.noise_factor(), &mut rng)
             .into_iter()
             .chain(iter::once(child))
             .collect()
@@ -119,7 +118,7 @@ mod tests {
         let evolver = DefaultEvolution::new(
             &[(0, 9), (10, 19), (20, 29)],
             &groups,
-            DefaultEvolutionConfig { cross_noise_factor: 0.0, ..Default::default() },
+            DefaultEvolutionConfig::default(),
         );
         let mom = evolver.random();
         let dad = evolver.random();
@@ -127,7 +126,8 @@ mod tests {
         let children = evolver.cross(
             &dad,
             &mom,
-            &Context { generation: 0, diversity: 0.5, stagnation: 0.0 },
+            // diversity=1.0, stagnation=0.0 → noise_factor=0.0 → no mutation; pure child is unmodified
+            &Context { generation: 0, diversity: 1.0, stagnation: 0.0 },
         );
         let child = &children[1];
 

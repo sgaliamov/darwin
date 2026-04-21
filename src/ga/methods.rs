@@ -422,7 +422,7 @@ mod tests {
         let evo_config = DefaultEvolutionConfig {
             max_mutation_sigma: 2.0,
             min_mutation_sigma: 1.0,
-            cross_noise_factor: 1.0,
+
             max_generation: config.max_generation,
         };
         let evolver = DefaultEvolution::new(&ranges, &groups, evo_config);

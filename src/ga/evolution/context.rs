@@ -12,3 +12,11 @@ pub struct Context {
     /// Stagnation pressure: `0.0` = still improving, `1.0` = fully stagnated.
     pub stagnation: f32,
 }
+
+impl Context {
+    /// Noise scaling factor derived from GA signals.
+    /// High diversity → exploit (low noise); high stagnation → explore (high noise).
+    pub fn noise_factor(&self) -> f32 {
+        (1.0 - self.diversity) + self.stagnation * self.diversity
+    }
+}
