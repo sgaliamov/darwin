@@ -1,57 +1,98 @@
-use crate::{Gene, GeneRangesRef, Genome, GenomeRef};
-use rand::{RngExt, SeedableRng, rngs::SmallRng};
+use crate::{Gene, GeneRanges, GeneRangesRef, Genome, GenomeRef};
+use rand::RngExt;
 use rand_distr::{Distribution, Normal};
 use std::iter;
 
-/// Evolution engine.
-/// Works with pure genomes.
-/// Need to be created per thread.
-pub struct Evolution<'a> {
-    rng: SmallRng,
-    ranges: GeneRangesRef<'a>,
-    normal: Normal<f32>,
-    cross_noise_factor: f32,
-    groups: &'a [usize],
+/// Trait for pluggable genome operation strategies.
+///
+/// Implementations must be `Send + Sync` so a single instance can be shared
+/// across Rayon threads without cloning or locking.
+pub trait Evolver: Send + Sync {
+    /// Generate a fully random genome within the configured gene ranges.
+    fn random(&self) -> Genome;
+
+    /// Return a mutated copy of `genome`, or `None` if the mutant falls outside range.
+    ///
+    /// - `generation`   — current generation number; used to derive mutation magnitude.
+    /// - `noise_factor` — per-pool scaling driven by diversity / stagnation; pass `1.0` to ignore.
+    fn mutant(&self, genome: GenomeRef, generation: usize, noise_factor: f32) -> Option<Genome>;
+
+    /// Produce offspring by crossing two parent genomes.
+    ///
+    /// `generation` is the current generation number; implementations may use it
+    /// to scale mutation applied to the child. Returns one or more child genomes.
+    fn cross(&self, dad: GenomeRef, mom: GenomeRef, generation: usize) -> Vec<Genome>;
 }
 
-impl<'a> Evolution<'a> {
+/// Built-in evolution engine.
+///
+/// Stateless — all randomness is drawn from `rand::rng()` (the thread-local RNG),
+/// so a single `Evolution` instance is `Sync` and can be shared freely across
+/// Rayon threads without cloning or per-thread initialisation.
+pub struct Evolution {
+    ranges: GeneRanges,
+    cross_noise_factor: f32,
+    groups: Vec<usize>,
+    max_mutation_sigma: f32,
+    min_mutation_sigma: f32,
+    max_generation: usize,
+}
+
+impl Evolution {
     pub fn new(
-        ranges: GeneRangesRef<'a>,
-        sigma: f32,
+        ranges: GeneRangesRef,
         cross_noise_factor: f32,
-        groups: &'a [usize],
+        groups: &[usize],
+        max_mutation_sigma: f32,
+        min_mutation_sigma: f32,
+        max_generation: usize,
     ) -> Self {
         assert!(!groups.is_empty());
-
         Self {
-            rng: SmallRng::from_rng(&mut rand::rng()),
-            ranges,
-            // μ (mean) is 0 to be able to shift left and right.
-            normal: Normal::new(0.0, sigma).expect("`sigma` should be valid."),
+            ranges: ranges.to_vec(),
             cross_noise_factor,
-            groups,
+            groups: groups.to_vec(),
+            max_mutation_sigma,
+            min_mutation_sigma,
+            max_generation,
         }
     }
 
-    /// Create random genome.
-    pub fn random(&mut self) -> Genome {
+    /// Linear annealing: sigma decreases from `max_mutation_sigma` to
+    /// `min_mutation_sigma` over `max_generation` generations.
+    fn sigma(&self, generation: usize) -> f32 {
+        if self.max_generation <= 1 {
+            return self.min_mutation_sigma;
+        }
+        let step = (self.max_mutation_sigma - self.min_mutation_sigma)
+            / (self.max_generation - 1) as f32;
+        (self.max_mutation_sigma - step * generation as f32).max(self.min_mutation_sigma)
+    }
+}
+
+impl Evolver for Evolution {
+    /// Create a random genome.
+    fn random(&self) -> Genome {
+        let mut rng = rand::rng();
         self.ranges
             .iter()
             .map(|range| {
                 if range.0 == range.1 {
                     range.0
                 } else {
-                    self.rng.random_range(range.0..=range.1)
+                    rng.random_range(range.0..=range.1)
                 }
             })
             .collect()
     }
 
-    /// Return a *mutated copy* of the given DNA. `noise_factor` scales the sigma
-    /// passed in from the GA (allows weaker noise for crossover offspring).
-    /// Mutants who goes too far from the range will be discarded.
-    /// `noise_factor` is a parameter as it depends on the pool diversity or cross mutation factor.
-    pub fn mutant(&mut self, genome: GenomeRef, noise_factor: f32) -> Option<Genome> {
+    /// Return a *mutated copy* of the given genome.
+    /// Mutants that fall outside the allowed range are discarded (returns `None`).
+    fn mutant(&self, genome: GenomeRef, generation: usize, noise_factor: f32) -> Option<Genome> {
+        let mut rng = rand::rng();
+        let sigma = self.sigma(generation);
+        // μ (mean) is 0 so shifts can go left or right.
+        let normal = Normal::new(0.0_f32, sigma).expect("`sigma` should be valid.");
         genome
             .iter()
             .enumerate()
@@ -62,7 +103,7 @@ impl<'a> Evolution<'a> {
                     return Some(*g);
                 }
 
-                let sample = self.normal.sample(&mut self.rng);
+                let sample = normal.sample(&mut rng);
                 let shift = (sample * noise_factor).round() as Gene;
                 let new = g + shift;
 
@@ -75,10 +116,10 @@ impl<'a> Evolution<'a> {
             .collect()
     }
 
-    /// For each group size in `self.groups`, copy that contiguous chunk
-    /// from one of the parents (50/50), preserving group boundaries.
+    /// For each group in `self.groups`, copy that contiguous chunk from one of the
+    /// parents (50 / 50), preserving group boundaries.
     /// Returns `[maybe_mutant, pure_child]` — mutant first if produced.
-    pub fn cross(&mut self, dad: GenomeRef, mom: GenomeRef) -> Vec<Genome> {
+    fn cross(&self, dad: GenomeRef, mom: GenomeRef, generation: usize) -> Vec<Genome> {
         debug_assert_eq!(dad.len(), mom.len(), "parents must be same length");
         debug_assert_eq!(
             self.groups.iter().sum::<usize>(),
@@ -86,6 +127,7 @@ impl<'a> Evolution<'a> {
             "group sizes must sum to genome length"
         );
 
+        let mut rng = rand::rng();
         let mut child = Vec::with_capacity(dad.len());
 
         self.groups
@@ -96,7 +138,7 @@ impl<'a> Evolution<'a> {
                 Some((start, *i)) // tbd: [ga] no need to swap groups with genes with static ranges
             })
             .for_each(|(start, end)| {
-                let src = if self.rng.random_bool(0.5) {
+                let src = if rng.random_bool(0.5) {
                     &dad[start..end]
                 } else {
                     &mom[start..end]
@@ -104,7 +146,7 @@ impl<'a> Evolution<'a> {
                 child.extend_from_slice(src);
             });
 
-        self.mutant(&child, self.cross_noise_factor)
+        self.mutant(&child, generation, self.cross_noise_factor)
             .into_iter()
             .chain(iter::once(child))
             .collect()
@@ -118,11 +160,11 @@ mod tests {
     #[test]
     fn cross_keeps_group_chunks_from_either_parent() {
         let groups = vec![2, 1];
-        let mut evolver = Evolution::new(&[(0, 9), (10, 19), (20, 29)], 1.0, 0.0, &groups);
+        let evolver = Evolution::new(&[(0, 9), (10, 19), (20, 29)], 0.0, &groups, 1.0, 1.0, 100);
         let mom = evolver.random();
         let dad = evolver.random();
 
-        let children = evolver.cross(&dad, &mom);
+        let children = evolver.cross(&dad, &mom, 0);
         let child = &children[1];
 
         let bounds: Vec<(usize, usize)> = groups

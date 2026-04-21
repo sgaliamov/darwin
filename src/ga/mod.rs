@@ -18,12 +18,9 @@ pub type CallbackFn<GaState, IndState> =
     fn(usize, &Option<(Genome, f64)>, &Pools<IndState>, &mut Option<GaState>);
 
 //  Evolution engine
-pub struct GeneticAlgorithm<'a, GaState, IndState> {
+pub struct GeneticAlgorithm<'a, GaState, IndState, E: Evolver> {
     /// Flat genome ranges
     ranges: GeneRanges,
-
-    /// Defines amount of genes in each group.
-    groups: Vec<usize>,
 
     /// GA configuration.
     config: &'a Config,
@@ -47,6 +44,9 @@ pub struct GeneticAlgorithm<'a, GaState, IndState> {
 
     /// Callback to report progress outside each generation.
     callback_fn: CallbackFn<GaState, IndState>,
+
+    /// Injected evolution strategy.
+    evolver: E,
 
     // --- Cached scalars for quick access ------------------------------------
     //

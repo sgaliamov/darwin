@@ -1,16 +1,16 @@
-use crate::{
-    CallbackFn, Config, Evolution, GeneticAlgorithm, Individual, Lineage, Pool, Pools, ScoreFn,
+﻿use crate::{
+    CallbackFn, Config, Evolver, GeneticAlgorithm, Individual, Lineage, Pool, Pools, ScoreFn,
 };
 use itertools::Itertools;
 use rand::prelude::*;
 use rayon::prelude::*;
 
-impl<'a, GaState, IndState> GeneticAlgorithm<'a, GaState, IndState>
+impl<'a, GaState, IndState, E: Evolver> GeneticAlgorithm<'a, GaState, IndState, E>
 where
     GaState: Sync,
     IndState: Send + Sync,
 {
-    pub fn new(config: &'a Config) -> Self {
+    pub fn new(config: &'a Config, evolver: E) -> Self {
         assert!(
             config.min_mutation_sigma <= config.max_mutation_sigma,
             "min_mutation_sigma must be <= mutation_sigma"
@@ -45,7 +45,6 @@ where
             .max(1.0) as usize;
 
         let ranges = config.ranges.iter().flatten().cloned().collect_vec();
-        let groups = config.ranges.iter().map(|g| g.len()).collect_vec();
 
         // Each seed genome goes to a pool in round-robin fashion.
         if !config.seed.is_empty() {
@@ -73,13 +72,13 @@ where
 
         Self {
             ranges,
-            groups,
             score_fn: |_, _| (f64::NAN, None),
             callback_fn: |_, _, _, _| {},
             state: None,
             best: None,
             config,
             pools,
+            evolver,
             crossover_size,
             stagnation_counter: 0,
             immigrant_count,
@@ -108,12 +107,9 @@ where
         // tbd: [future, ga] after finding a good individual, reset all pools at the end, add it as a seed and restart evolution one more time.
         // tbd: [future, ga] identical pools should be merged to save computation time.
         for generation in 0..=self.config.max_generation {
-            // Use Gaussian distribution to generate deviations from the current values on mutations.
-            let sigma = self.config.sigma(generation);
-
-            self.mutate(generation, sigma);
-            self.recombine(generation, sigma);
-            self.random(generation, sigma);
+            self.mutate(generation);
+            self.recombine(generation);
+            self.random(generation);
             self.evaluate_generation();
             let new_champ = self.update_champ();
             (self.callback_fn)(generation, &self.best, &self.pools, &mut self.state);
@@ -189,55 +185,51 @@ where
     }
 
     /// Spawn elite mutants inside every pool.
-    fn mutate(&mut self, generation: usize, sigma: f32) {
+    fn mutate(&mut self, generation: usize) {
         // Calculate stagnation boost: ratio grows as we get stuck
         let stagnation_boost =
             (self.stagnation_counter as f32 / self.config.stagnation_count as f32).min(1.0);
 
-        self.pools.par_iter_mut().for_each_init(
-            || {
-                Evolution::new(
-                    &self.ranges,
-                    sigma,
-                    self.config.mutation_noise_factor,
-                    &self.groups,
-                )
-            },
-            |evo, pool| {
-                if pool.individuals.is_empty() {
-                    return;
-                }
+        // Borrow evolver and mutant_count before the parallel loop so that
+        // par_iter_mut can take a mutable borrow of pools independently.
+        let evolver = &self.evolver;
+        let mutant_count = self.mutant_count;
 
-                let m = self.mutant_count.min(pool.individuals.len());
+        self.pools.par_iter_mut().for_each(|pool| {
+            if pool.individuals.is_empty() {
+                return;
+            }
 
-                // Apply both diversity-based and stagnation-based noise.
-                // When the diversity is high, we reduce mutation to allow exploitation.
-                // When stagnating, we increase mutation to force exploration.
-                let noise_factor = pool.noise_factor(stagnation_boost);
-                debug_assert!(noise_factor.is_finite());
+            let m = mutant_count.min(pool.individuals.len());
 
-                let mutants = pool.individuals[..m]
-                    .iter()
-                    .filter_map(|parent| {
-                        evo.mutant(&parent.genome, noise_factor)
-                            .map(|genome| (genome, parent.lineage.generation()))
-                    })
-                    .map(|(genome, parent)| {
-                        Individual::new(genome, Lineage::Mutant(generation, parent))
-                    })
-                    .collect_vec();
+            // Apply both diversity-based and stagnation-based noise.
+            // When the diversity is high, we reduce mutation to allow exploitation.
+            // When stagnating, we increase mutation to force exploration.
+            let noise_factor = pool.noise_factor(stagnation_boost);
+            debug_assert!(noise_factor.is_finite());
 
-                pool.individuals.extend(mutants);
-            },
-        );
+            let mutants = pool.individuals[..m]
+                .iter()
+                .filter_map(|parent| {
+                    evolver
+                        .mutant(&parent.genome, generation, noise_factor)
+                        .map(|genome| (genome, parent.lineage.generation()))
+                })
+                .map(|(genome, parent)| Individual::new(genome, Lineage::Mutant(generation, parent)))
+                .collect_vec();
+
+            pool.individuals.extend(mutants);
+        });
     }
 
     /// Recombine pools into offspring, possibly mutate, then migrate them.
     /// Short story: pair pools, breed `crossover_size` times, push kids to a chosen pool.
-    fn recombine(&mut self, generation: usize, sigma: f32) {
+    fn recombine(&mut self, generation: usize) {
         let Self {
             pools,
             crossover_size,
+            evolver,
+            mutant_count,
             config: Config {
                 tournament_size, ..
             },
@@ -246,37 +238,31 @@ where
 
         let crossover_size = *crossover_size;
         let tournament_size = *tournament_size;
+        let mutant_count = *mutant_count;
+        // Coerce to shared ref so the closure is Sync (E: Evolver: Sync).
+        let evolver: &E = evolver;
 
         let offspring: Vec<_> = pools
             .pairs(generation)
             .par_iter()
             .map_init(
-                || {
-                    let evo = Evolution::new(
-                        &self.ranges,
-                        sigma,
-                        self.config.mutation_noise_factor,
-                        &self.groups,
-                    );
-                    let rng = SmallRng::from_rng(&mut rand::rng());
-                    (evo, rng)
-                },
-                |(evo, rng), &(ia, ib)| {
+                || SmallRng::from_rng(&mut rand::rng()),
+                |rng, &(ia, ib)| {
                     let pa = &pools[ia];
                     let pb = &pools[ib];
                     let mut kids = Vec::with_capacity(crossover_size * 2); // 2 as cross may produce 2 kids
 
                     for _ in 0..crossover_size {
                         let (Some(dad), Some(mom)) = (
-                            pa.tournament_selection(tournament_size, self.mutant_count, rng),
-                            pb.tournament_selection(tournament_size, self.mutant_count, rng),
+                            pa.tournament_selection(tournament_size, mutant_count, rng),
+                            pb.tournament_selection(tournament_size, mutant_count, rng),
                         ) else {
                             continue;
                         };
 
                         let (ga, gb) = (dad.lineage.generation(), mom.lineage.generation());
 
-                        for g in evo.cross(&dad.genome, &mom.genome) {
+                        for g in evolver.cross(&dad.genome, &mom.genome, generation) {
                             kids.push(Individual::new(g, Lineage::Child(generation, ga, gb)));
                         }
                     }
@@ -302,7 +288,7 @@ where
 
     /// Restore populations size to the original with random immigrants.
     /// May overpopulate.
-    fn random(&mut self, generation: usize, sigma: f32) {
+    fn random(&mut self, generation: usize) {
         let quota = self.immigrant_count;
         // have to make first generation big as many individuals are not valid.
         //      ideally generation method should be delegated to a client and he could ensure,
@@ -313,29 +299,21 @@ where
             self.config.population_size
         };
 
-        self.pools.par_iter_mut().for_each_init(
-            || {
-                Evolution::new(
-                    &self.ranges,
-                    sigma,
-                    self.config.mutation_noise_factor,
-                    &self.groups,
-                )
-            },
-            |evo, pool| {
-                let current = pool.individuals.len();
-                let deficit = target.saturating_sub(current); // 0 if we’re already ≥ target
-                let count = quota.max(deficit);
+        let evolver = &self.evolver;
 
-                pool.individuals.extend(
-                    std::iter::repeat_with(|| {
-                        let genome = evo.random();
-                        Individual::firstborn(generation, genome)
-                    })
-                    .take(count),
-                );
-            },
-        );
+        self.pools.par_iter_mut().for_each(|pool| {
+            let current = pool.individuals.len();
+            let deficit = target.saturating_sub(current);
+            let count = quota.max(deficit);
+
+            pool.individuals.extend(
+                std::iter::repeat_with(|| {
+                    let genome = evolver.random();
+                    Individual::firstborn(generation, genome)
+                })
+                .take(count),
+            );
+        });
     }
 
     /// Check for stagnation: if the global best has not improved for a
@@ -433,7 +411,18 @@ mod tests {
     }
 
     fn test_run(config: Config, writer: BufWriter<&mut Vec<u8>>) -> bool {
-        let mut ga = GeneticAlgorithm::new(&config);
+        use crate::Evolution;
+        let ranges: Vec<_> = config.ranges.iter().flatten().cloned().collect();
+        let groups: Vec<_> = config.ranges.iter().map(|g| g.len()).collect();
+        let evolver = Evolution::new(
+            &ranges,
+            config.mutation_noise_factor,
+            &groups,
+            config.max_mutation_sigma,
+            config.min_mutation_sigma,
+            config.max_generation,
+        );
+        let mut ga = GeneticAlgorithm::new(&config, evolver);
         ga.set_score_fn(sphere);
         ga.set_callback_fn(callback_fn);
         ga.set_state((&config, writer));
