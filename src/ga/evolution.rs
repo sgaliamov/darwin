@@ -34,6 +34,47 @@ pub trait Evolver: Send + Sync {
     fn cross(&self, dad: GenomeRef, mom: GenomeRef, ctx: &Context) -> Vec<Genome>;
 }
 
+/// Configuration for the built-in [`Evolution`] evolver.
+/// Kept separate from [`crate::Config`] so GA config stays evolver-agnostic.
+#[derive(Debug, Clone, PartialEq)]
+pub struct EvolutionConfig {
+    /// Initial standard deviation for Gaussian mutation noise.
+    pub max_mutation_sigma: f32,
+
+    /// Floor for annealed sigma — prevents mutation from freezing completely.
+    pub min_mutation_sigma: f32,
+
+    /// Relative noise factor applied to offspring after crossover.
+    pub cross_noise_factor: f32,
+
+    /// Total number of generations; used to compute the annealing step.
+    pub max_generation: usize,
+}
+
+impl EvolutionConfig {
+    /// Linear annealing: sigma decreases from `max_mutation_sigma` to
+    /// `min_mutation_sigma` over `max_generation` generations.
+    pub fn sigma(&self, generation: usize) -> f32 {
+        if self.max_generation <= 1 {
+            return self.min_mutation_sigma;
+        }
+        let step = (self.max_mutation_sigma - self.min_mutation_sigma)
+            / (self.max_generation - 1) as f32;
+        (self.max_mutation_sigma - step * generation as f32).max(self.min_mutation_sigma)
+    }
+}
+
+impl Default for EvolutionConfig {
+    fn default() -> Self {
+        Self {
+            max_mutation_sigma: 3.0,
+            min_mutation_sigma: 1.0,
+            cross_noise_factor: 1.0,
+            max_generation: 999,
+        }
+    }
+}
+
 /// Built-in evolution engine.
 ///
 /// Stateless — all randomness is drawn from `rand::rng()` (the thread-local RNG),
@@ -41,42 +82,22 @@ pub trait Evolver: Send + Sync {
 /// Rayon threads without cloning or per-thread initialisation.
 pub struct Evolution {
     ranges: GeneRanges,
-    cross_noise_factor: f32,
     groups: Vec<usize>,
-    max_mutation_sigma: f32,
-    min_mutation_sigma: f32,
-    max_generation: usize,
+    config: EvolutionConfig,
 }
 
 impl Evolution {
-    pub fn new(
-        ranges: GeneRangesRef,
-        cross_noise_factor: f32,
-        groups: &[usize],
-        max_mutation_sigma: f32,
-        min_mutation_sigma: f32,
-        max_generation: usize,
-    ) -> Self {
+    pub fn new(ranges: GeneRangesRef, groups: &[usize], config: EvolutionConfig) -> Self {
         assert!(!groups.is_empty());
         Self {
             ranges: ranges.to_vec(),
-            cross_noise_factor,
             groups: groups.to_vec(),
-            max_mutation_sigma,
-            min_mutation_sigma,
-            max_generation,
+            config,
         }
     }
 
-    /// Linear annealing: sigma decreases from `max_mutation_sigma` to
-    /// `min_mutation_sigma` over `max_generation` generations.
     fn sigma(&self, generation: usize) -> f32 {
-        if self.max_generation <= 1 {
-            return self.min_mutation_sigma;
-        }
-        let step = (self.max_mutation_sigma - self.min_mutation_sigma)
-            / (self.max_generation - 1) as f32;
-        (self.max_mutation_sigma - step * generation as f32).max(self.min_mutation_sigma)
+        self.config.sigma(generation)
     }
 }
 
@@ -160,7 +181,7 @@ impl Evolver for Evolution {
 
         // Cross-noise: use a reduced stagnation so crossover children mutate gently.
         let cross_ctx = Context {
-            stagnation: self.cross_noise_factor,
+            stagnation: self.config.cross_noise_factor,
             ..*ctx
         };
         self.mutant(&child, &cross_ctx)
@@ -177,7 +198,11 @@ mod tests {
     #[test]
     fn cross_keeps_group_chunks_from_either_parent() {
         let groups = vec![2, 1];
-        let evolver = Evolution::new(&[(0, 9), (10, 19), (20, 29)], 0.0, &groups, 1.0, 1.0, 100);
+        let evolver = Evolution::new(
+            &[(0, 9), (10, 19), (20, 29)],
+            &groups,
+            EvolutionConfig { cross_noise_factor: 0.0, ..Default::default() },
+        );
         let mom = evolver.random();
         let dad = evolver.random();
 

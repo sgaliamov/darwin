@@ -12,14 +12,6 @@ where
     IndState: Send + Sync,
 {
     pub fn new(config: &'a Config, evolver: E) -> Self {
-        assert!(
-            config.min_mutation_sigma <= config.max_mutation_sigma,
-            "min_mutation_sigma must be <= mutation_sigma"
-        );
-        assert!(
-            config.min_mutation_sigma > 0.0,
-            "min_mutation_sigma must be > 0"
-        );
         assert!(config.stagnation_count > 0, "stall_generations must be > 0");
         assert!((0.0..1.0).contains(&config.crossover_ratio));
         assert!(config.random_ratio >= 0.0, "random_ratio must be >= 0");
@@ -366,11 +358,9 @@ mod tests {
         let (config, writer) = state.as_mut().unwrap();
 
         for pool in pools.iter() {
-            let sigma = config.sigma(g);
             let line = format!(
-                "{g}_{} σ{:.2} π{:.6} total: {}\n",
+                "{g}_{} π{:.6} total: {}\n",
                 pool.number,
-                sigma,
                 pool.diversity(),
                 pool.individuals.len()
             );
@@ -399,10 +389,7 @@ mod tests {
             stagnation_count: 100,
             population_size: 100,
             pools: 8,
-            max_mutation_sigma: 2.0,
-            min_mutation_sigma: 1.0,
             ranges: vec![vec![(0, 99); 6]],
-            mutation_noise_factor: 1.0,
             tournament_size: 3,
             seed: vec![vec![0, 0, 0, 0, 0, 99]],
             ..Default::default()
@@ -420,17 +407,16 @@ mod tests {
     }
 
     fn test_run(config: Config, writer: BufWriter<&mut Vec<u8>>) -> bool {
-        use crate::Evolution;
+        use crate::{Evolution, EvolutionConfig};
         let ranges: Vec<_> = config.ranges.iter().flatten().cloned().collect();
         let groups: Vec<_> = config.ranges.iter().map(|g| g.len()).collect();
-        let evolver = Evolution::new(
-            &ranges,
-            config.mutation_noise_factor,
-            &groups,
-            config.max_mutation_sigma,
-            config.min_mutation_sigma,
-            config.max_generation,
-        );
+        let evo_config = EvolutionConfig {
+            max_mutation_sigma: 2.0,
+            min_mutation_sigma: 1.0,
+            cross_noise_factor: 1.0,
+            max_generation: config.max_generation,
+        };
+        let evolver = Evolution::new(&ranges, &groups, evo_config);
         let mut ga = GeneticAlgorithm::new(&config, evolver);
         ga.set_score_fn(sphere);
         ga.set_callback_fn(callback_fn);
