@@ -134,7 +134,7 @@ impl<State> Pool<State> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Context, DefaultEvolution, EvolutionConfig, Evolver, Lineage, Pool};
+    use crate::{Context, DefaultEvolution, DefaultEvolutionConfig, Evolver, Lineage, Pool};
     use itertools::Itertools;
     use rand::{RngExt, SeedableRng, rngs::StdRng};
     use spectral::prelude::*;
@@ -142,7 +142,7 @@ mod tests {
     #[test]
     fn test_diversity() {
         let ranges = &[(0, 1_000); 100];
-        let evo = DefaultEvolution::new(ranges, &[100], EvolutionConfig::default());
+        let evo = DefaultEvolution::new(ranges, &[100], DefaultEvolutionConfig::default());
 
         let individuals = (0..100)
             .map(|_| Individual::<()>::firstborn(0, evo.random()))
@@ -175,7 +175,7 @@ mod tests {
                     let evo = DefaultEvolution::new(
                         ranges,
                         &[1],
-                        EvolutionConfig { max_mutation_sigma: sigma, min_mutation_sigma: sigma, ..Default::default() },
+                        DefaultEvolutionConfig { max_mutation_sigma: sigma, min_mutation_sigma: sigma, ..Default::default() },
                     );
                     evo.mutant(&[500], &Context { generation: 0, diversity: 0.5, stagnation: 0.0 })
                         .map(|genome| Individual::<()>::new(genome, Lineage::Mutant(0, g)))
@@ -199,7 +199,7 @@ mod tests {
         let evo = DefaultEvolution::new(
             ranges,
             &[1],
-            EvolutionConfig { max_mutation_sigma: std_dev, min_mutation_sigma: std_dev, ..Default::default() },
+            DefaultEvolutionConfig { max_mutation_sigma: std_dev, min_mutation_sigma: std_dev, ..Default::default() },
         );
         let ctx = Context { generation: 0, diversity: 0.5, stagnation: 0.0 };
 
@@ -340,7 +340,7 @@ mod tests {
 
     fn test_remove_duplicates() {
         let ranges = &[(0, 1_000); 10];
-        let evo = DefaultEvolution::new(ranges, &[10], EvolutionConfig::default());
+        let evo = DefaultEvolution::new(ranges, &[10], DefaultEvolutionConfig::default());
         let i1 = Individual::firstborn(0, evo.random());
         let i2 = Individual::firstborn(0, evo.random());
         let i3 = Individual::new(i2.genome.clone(), i2.lineage.clone());
@@ -354,7 +354,7 @@ mod tests {
     #[test]
     fn test_deduplication_keeps_with_fitness() {
         let ranges = &[(0, 1_000); 10];
-        let evo = DefaultEvolution::new(ranges, &[10], EvolutionConfig::default());
+        let evo = DefaultEvolution::new(ranges, &[10], DefaultEvolutionConfig::default());
         let i1 = Individual::firstborn(0, evo.random());
         let mut i2 = Individual::<()>::new(i1.genome.clone(), i1.lineage.clone());
         i2.fitness = 1.0;

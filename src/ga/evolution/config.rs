@@ -1,7 +1,7 @@
 /// Configuration for the built-in [`super::default_evolution::DefaultEvolution`] evolver.
 /// Kept separate from [`crate::Config`] so GA config stays evolver-agnostic.
 #[derive(Debug, Clone, PartialEq)]
-pub struct EvolutionConfig {
+pub struct DefaultEvolutionConfig {
     /// Initial standard deviation for Gaussian mutation noise.
     pub max_mutation_sigma: f32,
 
@@ -15,7 +15,7 @@ pub struct EvolutionConfig {
     pub max_generation: usize,
 }
 
-impl EvolutionConfig {
+impl DefaultEvolutionConfig {
     /// Linear annealing: sigma decreases from `max_mutation_sigma` to
     /// `min_mutation_sigma` over `max_generation` generations.
     pub fn sigma(&self, generation: usize) -> f32 {
@@ -28,7 +28,7 @@ impl EvolutionConfig {
     }
 }
 
-impl Default for EvolutionConfig {
+impl Default for DefaultEvolutionConfig {
     fn default() -> Self {
         Self {
             max_mutation_sigma: 3.0,

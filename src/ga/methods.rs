@@ -416,10 +416,10 @@ mod tests {
     }
 
     fn test_run(config: Config, writer: BufWriter<&mut Vec<u8>>) -> bool {
-        use crate::{DefaultEvolution, EvolutionConfig};
+        use crate::{DefaultEvolution, DefaultEvolutionConfig};
         let ranges: Vec<_> = config.ranges.iter().flatten().cloned().collect();
         let groups: Vec<_> = config.ranges.iter().map(|g| g.len()).collect();
-        let evo_config = EvolutionConfig {
+        let evo_config = DefaultEvolutionConfig {
             max_mutation_sigma: 2.0,
             min_mutation_sigma: 1.0,
             cross_noise_factor: 1.0,

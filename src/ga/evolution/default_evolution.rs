@@ -5,7 +5,7 @@ use std::iter;
 
 use super::context::Context;
 use super::evolver::Evolver;
-use super::config::EvolutionConfig;
+use super::config::DefaultEvolutionConfig;
 
 /// Built-in evolution engine.
 ///
@@ -15,11 +15,11 @@ use super::config::EvolutionConfig;
 pub struct DefaultEvolution {
     ranges: GeneRanges,
     groups: Vec<usize>,
-    config: EvolutionConfig,
+    config: DefaultEvolutionConfig,
 }
 
 impl DefaultEvolution {
-    pub fn new(ranges: GeneRangesRef, groups: &[usize], config: EvolutionConfig) -> Self {
+    pub fn new(ranges: GeneRangesRef, groups: &[usize], config: DefaultEvolutionConfig) -> Self {
         assert!(!groups.is_empty());
         Self {
             ranges: ranges.to_vec(),
@@ -126,7 +126,7 @@ mod tests {
         let evolver = DefaultEvolution::new(
             &[(0, 9), (10, 19), (20, 29)],
             &groups,
-            EvolutionConfig { cross_noise_factor: 0.0, ..Default::default() },
+            DefaultEvolutionConfig { cross_noise_factor: 0.0, ..Default::default() },
         );
         let mom = evolver.random();
         let dad = evolver.random();
