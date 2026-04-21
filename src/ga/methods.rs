@@ -1,6 +1,6 @@
 ﻿use crate::{
-    CallbackFn, Config, Evolver, GeneticAlgorithm, Individual, Lineage, Context, Pool,
-    Pools, ScoreFn,
+    CallbackFn, Config, Context, Evolver, GeneticAlgorithm, Individual, Lineage, Pool, Pools,
+    ScoreFn,
 };
 use itertools::Itertools;
 use rand::prelude::*;
@@ -208,7 +208,9 @@ where
                         .mutant(&parent.genome, &ctx)
                         .map(|genome| (genome, parent.lineage.generation()))
                 })
-                .map(|(genome, parent)| Individual::new(genome, Lineage::Mutant(generation, parent)))
+                .map(|(genome, parent)| {
+                    Individual::new(genome, Lineage::Mutant(generation, parent))
+                })
                 .collect_vec();
 
             pool.individuals.extend(mutants);
@@ -218,6 +220,9 @@ where
     /// Recombine pools into offspring, possibly mutate, then migrate them.
     /// Short story: pair pools, breed `crossover_size` times, push kids to a chosen pool.
     fn recombine(&mut self, generation: usize) {
+        let stagnation_boost =
+            (self.stagnation_counter as f32 / self.config.stagnation_count as f32).min(1.0);
+
         let Self {
             pools,
             crossover_size,
@@ -245,6 +250,10 @@ where
                     let pb = &pools[ib];
                     let mut kids = Vec::with_capacity(crossover_size * 2); // 2 as cross may produce 2 kids
 
+                    // Average diversity of the two paired pools gives a fair signal
+                    // without arbitrarily favouring one partner over the other.
+                    let diversity = (pa.diversity() + pb.diversity()) / 2.0;
+
                     for _ in 0..crossover_size {
                         let (Some(dad), Some(mom)) = (
                             pa.tournament_selection(tournament_size, mutant_count, rng),
@@ -260,8 +269,8 @@ where
                             &mom.genome,
                             &Context {
                                 generation,
-                                diversity: 0.5,
-                                stagnation: 0.0,
+                                diversity,
+                                stagnation: stagnation_boost,
                             },
                         ) {
                             kids.push(Individual::new(g, Lineage::Child(generation, ga, gb)));

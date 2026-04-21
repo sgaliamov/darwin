@@ -5,13 +5,13 @@ use std::iter;
 
 use super::context::Context;
 use super::evolver::Evolver;
-use super::evolution_config::EvolutionConfig;
+use super::config::EvolutionConfig;
 
 /// Built-in evolution engine.
 ///
 /// Stateless — all randomness is drawn from `rand::rng()` (the thread-local RNG),
 /// so a single `DefaultEvolution` instance is `Sync` and can be shared freely across
-/// Rayon threads without cloning or per-thread initialisation.
+/// Rayon threads without cloning or per-thread initialisation short flight.  I need a short flight. .
 pub struct DefaultEvolution {
     ranges: GeneRanges,
     groups: Vec<usize>,
