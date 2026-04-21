@@ -1,4 +1,4 @@
-use crate::{Genome, GenomeRef};
+use super::super::genome::{Genome, GenomeRef};
 use super::context::Context;
 
 /// Trait for pluggable genome operation strategies.

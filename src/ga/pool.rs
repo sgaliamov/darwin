@@ -134,7 +134,7 @@ impl<State> Pool<State> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Evolution, Lineage, Pool};
+    use crate::{Context, DefaultEvolution, EvolutionConfig, Evolver, Lineage, Pool};
     use itertools::Itertools;
     use rand::{RngExt, SeedableRng, rngs::StdRng};
     use spectral::prelude::*;
@@ -142,7 +142,7 @@ mod tests {
     #[test]
     fn test_diversity() {
         let ranges = &[(0, 1_000); 100];
-        let mut evo = Evolution::new(ranges, 1.0, 0.0, &[100]);
+        let evo = DefaultEvolution::new(ranges, &[100], EvolutionConfig::default());
 
         let individuals = (0..100)
             .map(|_| Individual::<()>::firstborn(0, evo.random()))
@@ -170,11 +170,14 @@ mod tests {
         ];
 
         for &(sigma, tolerance) in test_cases {
-            let noise_factor = 1.0;
             let items = (0..1_000)
                 .filter_map(|g| {
-                    let mut evo = Evolution::new(ranges, sigma, 0.0, &[1]);
-                    evo.mutant(&[500], noise_factor)
+                    let evo = DefaultEvolution::new(
+                        ranges,
+                        &[1],
+                        EvolutionConfig { max_mutation_sigma: sigma, min_mutation_sigma: sigma, ..Default::default() },
+                    );
+                    evo.mutant(&[500], &Context { generation: 0, diversity: 0.5, stagnation: 0.0 })
                         .map(|genome| Individual::<()>::new(genome, Lineage::Mutant(0, g)))
                 })
                 .collect_vec();
@@ -193,12 +196,16 @@ mod tests {
     fn _tuning() {
         let ranges = &[(0, 100)];
         let std_dev = 0.5; // 5% // 1 - 10% // 2 - 20% // 5 - 50%;
-        let noise_factor = 1.0;
-        let mut evo = Evolution::new(ranges, 1.0, std_dev, &[1]);
+        let evo = DefaultEvolution::new(
+            ranges,
+            &[1],
+            EvolutionConfig { max_mutation_sigma: std_dev, min_mutation_sigma: std_dev, ..Default::default() },
+        );
+        let ctx = Context { generation: 0, diversity: 0.5, stagnation: 0.0 };
 
         let items = (0..100_000)
             .map(|g| {
-                let genome = evo.mutant(&[50], noise_factor).unwrap();
+                let genome = evo.mutant(&[50], &ctx).unwrap();
                 Individual::<()>::new(genome, Lineage::Mutant(0, g))
             })
             .collect_vec();
@@ -333,7 +340,7 @@ mod tests {
 
     fn test_remove_duplicates() {
         let ranges = &[(0, 1_000); 10];
-        let mut evo = Evolution::new(ranges, 1.0, 0.0, &[10]);
+        let evo = DefaultEvolution::new(ranges, &[10], EvolutionConfig::default());
         let i1 = Individual::firstborn(0, evo.random());
         let i2 = Individual::firstborn(0, evo.random());
         let i3 = Individual::new(i2.genome.clone(), i2.lineage.clone());
@@ -347,7 +354,7 @@ mod tests {
     #[test]
     fn test_deduplication_keeps_with_fitness() {
         let ranges = &[(0, 1_000); 10];
-        let mut evo = Evolution::new(ranges, 1.0, 0.0, &[10]);
+        let evo = DefaultEvolution::new(ranges, &[10], EvolutionConfig::default());
         let i1 = Individual::firstborn(0, evo.random());
         let mut i2 = Individual::<()>::new(i1.genome.clone(), i1.lineage.clone());
         i2.fitness = 1.0;

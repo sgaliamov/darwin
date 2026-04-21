@@ -1,4 +1,4 @@
-use crate::{Gene, GeneRanges, GeneRangesRef, Genome, GenomeRef};
+use super::super::genome::{Gene, GeneRanges, GeneRangesRef, Genome, GenomeRef};
 use rand::RngExt;
 use rand_distr::{Distribution, Normal};
 use std::iter;

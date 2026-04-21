@@ -407,7 +407,7 @@ mod tests {
     }
 
     fn test_run(config: Config, writer: BufWriter<&mut Vec<u8>>) -> bool {
-        use crate::{Evolution, EvolutionConfig};
+        use crate::{DefaultEvolution, EvolutionConfig};
         let ranges: Vec<_> = config.ranges.iter().flatten().cloned().collect();
         let groups: Vec<_> = config.ranges.iter().map(|g| g.len()).collect();
         let evo_config = EvolutionConfig {
@@ -416,7 +416,7 @@ mod tests {
             cross_noise_factor: 1.0,
             max_generation: config.max_generation,
         };
-        let evolver = Evolution::new(&ranges, &groups, evo_config);
+        let evolver = DefaultEvolution::new(&ranges, &groups, evo_config);
         let mut ga = GeneticAlgorithm::new(&config, evolver);
         ga.set_score_fn(sphere);
         ga.set_callback_fn(callback_fn);
