@@ -1,11 +1,10 @@
 use super::super::genome::{Gene, GeneRanges, GeneRangesRef, Genome, GenomeRef};
+use super::config::DefaultEvolutionConfig;
+use super::context::Context;
+use super::evolver::Evolver;
 use rand::RngExt;
 use rand_distr::{Distribution, Normal};
 use std::iter;
-
-use super::context::Context;
-use super::evolver::Evolver;
-use super::config::DefaultEvolutionConfig;
 
 /// Built-in evolution engine.
 ///
@@ -29,9 +28,16 @@ impl DefaultEvolution {
     }
 
     /// Core mutation logic — applies Gaussian noise derived from `ctx`.
-    fn mutant_with_noise(&self, genome: GenomeRef, ctx: &Context, noise_factor: f32, rng: &mut impl rand::Rng) -> Option<Genome> {
+    fn mutant_with_noise(
+        &self,
+        genome: GenomeRef,
+        ctx: &Context,
+        noise_factor: f32,
+        rng: &mut impl rand::Rng,
+    ) -> Option<Genome> {
         // μ = 0 so shifts are symmetric around the original value.
-        let normal = Normal::new(0.0_f32, self.config.sigma(ctx.generation)).expect("`sigma` should be valid.");
+        let normal = Normal::new(0.0_f32, self.config.sigma(ctx.generation))
+            .expect("`sigma` should be valid.");
         genome
             .iter()
             .enumerate()
@@ -42,11 +48,14 @@ impl DefaultEvolution {
                 }
                 let shift = (normal.sample(rng) * noise_factor).round() as Gene;
                 let new = g + shift;
-                if new < range.0 || new > range.1 { None } else { Some(new) }
+                if new < range.0 || new > range.1 {
+                    None
+                } else {
+                    Some(new)
+                }
             })
             .collect()
     }
-
 }
 
 impl Evolver for DefaultEvolution {
@@ -137,11 +146,17 @@ mod tests {
         let evo = make_evo(&[(0, 1_000_000)]);
         let genome = vec![500_000i64];
         // diversity=1 stagnation=0 → noise_factor=0 → shift is ~0 almost always
-        let ctx = Context { generation: 0, diversity: 1.0, stagnation: 0.0 };
+        let ctx = Context {
+            generation: 0,
+            diversity: 1.0,
+            stagnation: 0.0,
+        };
         let mut same = 0usize;
         for _ in 0..100 {
             if let Some(m) = evo.mutant(&genome, &ctx) {
-                if m == genome { same += 1; }
+                if m == genome {
+                    same += 1;
+                }
             }
         }
         assert_that!(same).is_greater_than(80);
@@ -154,10 +169,18 @@ mod tests {
         let evo = DefaultEvolution::new(
             &ranges,
             &[1],
-            DefaultEvolutionConfig { max_mutation_sigma: 1000.0, min_mutation_sigma: 500.0, max_generation: 100 },
+            DefaultEvolutionConfig {
+                max_mutation_sigma: 1000.0,
+                min_mutation_sigma: 500.0,
+                max_generation: 100,
+            },
         );
         let genome = vec![5i64];
-        let ctx = Context { generation: 0, diversity: 0.0, stagnation: 0.0 };
+        let ctx = Context {
+            generation: 0,
+            diversity: 0.0,
+            stagnation: 0.0,
+        };
         // mutants that land outside the range return None — verify any Some is in range
         for _ in 0..200 {
             if let Some(m) = evo.mutant(&genome, &ctx) {
@@ -181,7 +204,11 @@ mod tests {
             &dad,
             &mom,
             // diversity=1.0, stagnation=0.0 → noise_factor=0.0 → no mutation; pure child is unmodified
-            &Context { generation: 0, diversity: 1.0, stagnation: 0.0 },
+            &Context {
+                generation: 0,
+                diversity: 1.0,
+                stagnation: 0.0,
+            },
         );
         let child = &children[1];
 

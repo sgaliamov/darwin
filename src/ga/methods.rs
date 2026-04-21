@@ -220,6 +220,7 @@ where
     /// Recombine pools into offspring, possibly mutate, then migrate them.
     /// Short story: pair pools, breed `crossover_size` times, push kids to a chosen pool.
     fn recombine(&mut self, generation: usize) {
+        // todo: should use stagnation_counter directly?
         let stagnation_boost =
             (self.stagnation_counter as f32 / self.config.stagnation_count as f32).min(1.0);
 
@@ -300,9 +301,9 @@ where
     /// May overpopulate.
     fn random(&mut self, generation: usize) {
         let quota = self.immigrant_count;
-        // have to make first generation big as many individuals are not valid.
-        //      ideally generation method should be delegated to a client and he could ensure,
-        //      that new individuals are valid.
+        // have to make the first generation bigger, as many individuals are not valid.
+        // ideally generation method should be delegated to a client and he could ensure,
+        // that new individuals are valid.
         let target = if generation == 0 {
             self.config.population_size * 10
         } else {
