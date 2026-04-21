@@ -30,7 +30,47 @@ impl Default for DefaultEvolutionConfig {
         Self {
             max_mutation_sigma: 3.0,
             min_mutation_sigma: 1.0,
-            max_generation: 999,
+            max_generation: 999, // starting with 0
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use spectral::prelude::*;
+
+    /// Sigma at gen 0 = max; at last gen ≈ min.
+    #[test]
+    fn sigma_anneals_from_max_to_min() {
+        let cfg = DefaultEvolutionConfig {
+            max_mutation_sigma: 10.0,
+            min_mutation_sigma: 1.0,
+            max_generation: 10,
+        };
+        assert_that!(cfg.sigma(0)).is_close_to(10.0, 1e-5);
+        assert_that!(cfg.sigma(9)).is_close_to(1.0, 1e-5);
+    }
+
+    /// Sigma never drops below min even past max_generation.
+    #[test]
+    fn sigma_floors_at_min() {
+        let cfg = DefaultEvolutionConfig {
+            max_mutation_sigma: 5.0,
+            min_mutation_sigma: 2.0,
+            max_generation: 5,
+        };
+        assert_that!(cfg.sigma(9999)).is_equal_to(2.0);
+    }
+
+    /// Single-generation config always returns min.
+    #[test]
+    fn sigma_single_generation_returns_min() {
+        let cfg = DefaultEvolutionConfig {
+            max_mutation_sigma: 8.0,
+            min_mutation_sigma: 0.5,
+            max_generation: 1,
+        };
+        assert_that!(cfg.sigma(0)).is_equal_to(0.5);
     }
 }

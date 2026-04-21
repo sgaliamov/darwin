@@ -20,3 +20,37 @@ impl Context {
         (1.0 - self.diversity) + self.stagnation * self.diversity
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use spectral::prelude::*;
+
+    /// diversity=0 → noise=1 regardless of stagnation.
+    #[test]
+    fn converged_pool_is_max_noise() {
+        let ctx = Context { generation: 0, diversity: 0.0, stagnation: 0.0 };
+        assert_that!(ctx.noise_factor()).is_close_to(1.0, 1e-6);
+    }
+
+    /// diversity=1, stagnation=0 → noise=0 (pure exploitation).
+    #[test]
+    fn diverse_stable_pool_is_min_noise() {
+        let ctx = Context { generation: 0, diversity: 1.0, stagnation: 0.0 };
+        assert_that!(ctx.noise_factor()).is_close_to(0.0, 1e-6);
+    }
+
+    /// diversity=1, stagnation=1 → noise=1 (stagnation forces exploration).
+    #[test]
+    fn stagnated_diverse_pool_is_max_noise() {
+        let ctx = Context { generation: 0, diversity: 1.0, stagnation: 1.0 };
+        assert_that!(ctx.noise_factor()).is_close_to(1.0, 1e-6);
+    }
+
+    /// diversity=0.5, stagnation=0.5 → (0.5) + (0.5 * 0.5) = 0.75.
+    #[test]
+    fn mid_values_blend_correctly() {
+        let ctx = Context { generation: 0, diversity: 0.5, stagnation: 0.5 };
+        assert_that!(ctx.noise_factor()).is_close_to(0.75, 1e-6);
+    }
+}

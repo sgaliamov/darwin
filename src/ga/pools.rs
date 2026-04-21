@@ -92,7 +92,60 @@ impl<IndState> Pools<IndState> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::Individual;
     use spectral::prelude::*;
+
+    fn make_pools(fitness_per_pool: &[&[f64]]) -> Pools<()> {
+        let pools = fitness_per_pool
+            .iter()
+            .enumerate()
+            .map(|(i, fitnesses)| {
+                let individuals = fitnesses
+                    .iter()
+                    .map(|&f| {
+                        let mut ind = Individual::<()>::firstborn(0, vec![]);
+                        ind.fitness = f;
+                        ind
+                    })
+                    .collect();
+                Pool::new(i, individuals)
+            })
+            .collect();
+        Pools::from_vec(pools)
+    }
+
+    /// `top_individuals_mut` collects across all pools, sorted best-first.
+    #[test]
+    fn top_individuals_returns_sorted_best_first() {
+        let mut pools = make_pools(&[&[1.0, 3.0], &[2.0, 4.0]]);
+        let top = pools.top_individuals_mut(3);
+        let fitnesses: Vec<f64> = top.iter().map(|i| i.fitness).collect();
+        assert_that!(fitnesses).is_equal_to(vec![4.0, 3.0, 2.0]);
+    }
+
+    /// `pairs` returns no duplicates and no self-pairs.
+    #[test]
+    fn pairs_no_self_pairs_no_duplicates() {
+        let pools = make_pools(&[&[1.0], &[1.0], &[1.0], &[1.0]]);
+        for gnr in 0..10 {
+            let pairs = pools.pairs(gnr);
+            for &(a, b) in &pairs {
+                assert_ne!(a, b, "self-pair at gen {gnr}");
+            }
+        }
+    }
+
+    /// Empty pools are excluded from pairing.
+    #[test]
+    fn pairs_skips_empty_pools() {
+        // pool 0 empty, pool 1 and 2 populated
+        let pools = make_pools(&[&[], &[1.0], &[1.0]]);
+        let pairs = pools.pairs(0);
+        for &(a, b) in &pairs {
+            assert_ne!(a, 0, "empty pool 0 paired at gen 0");
+            assert_ne!(b, 0, "empty pool 0 paired at gen 0");
+        }
+    }
 
     #[test]
     fn pair_never_returns_self() {

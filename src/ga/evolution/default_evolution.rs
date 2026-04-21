@@ -111,6 +111,60 @@ impl Evolver for DefaultEvolution {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use spectral::prelude::*;
+
+    fn make_evo(ranges: &[(i64, i64)]) -> DefaultEvolution {
+        let groups = vec![ranges.len()];
+        DefaultEvolution::new(ranges, &groups, DefaultEvolutionConfig::default())
+    }
+
+    /// Every gene of `random()` must stay within its declared range.
+    #[test]
+    fn random_genome_stays_in_range() {
+        let ranges: Vec<_> = vec![(0, 9), (10, 19), (100, 200)];
+        let evo = make_evo(&ranges);
+        for _ in 0..100 {
+            let g = evo.random();
+            for (gene, &(lo, hi)) in g.iter().zip(ranges.iter()) {
+                assert!(*gene >= lo && *gene <= hi, "gene {gene} out of [{lo},{hi}]");
+            }
+        }
+    }
+
+    /// `mutant` with low sigma and high diversity (noise≈0) almost always returns the same genome.
+    #[test]
+    fn mutant_with_zero_noise_returns_same_genome() {
+        let evo = make_evo(&[(0, 1_000_000)]);
+        let genome = vec![500_000i64];
+        // diversity=1 stagnation=0 → noise_factor=0 → shift is ~0 almost always
+        let ctx = Context { generation: 0, diversity: 1.0, stagnation: 0.0 };
+        let mut same = 0usize;
+        for _ in 0..100 {
+            if let Some(m) = evo.mutant(&genome, &ctx) {
+                if m == genome { same += 1; }
+            }
+        }
+        assert_that!(same).is_greater_than(80);
+    }
+
+    /// `mutant` result always stays within range even with huge sigma.
+    #[test]
+    fn mutant_never_exceeds_range() {
+        let ranges: Vec<_> = vec![(0, 10)];
+        let evo = DefaultEvolution::new(
+            &ranges,
+            &[1],
+            DefaultEvolutionConfig { max_mutation_sigma: 1000.0, min_mutation_sigma: 500.0, max_generation: 100 },
+        );
+        let genome = vec![5i64];
+        let ctx = Context { generation: 0, diversity: 0.0, stagnation: 0.0 };
+        // mutants that land outside the range return None — verify any Some is in range
+        for _ in 0..200 {
+            if let Some(m) = evo.mutant(&genome, &ctx) {
+                assert!(m[0] >= 0 && m[0] <= 10, "mutant {} out of range", m[0]);
+            }
+        }
+    }
 
     #[test]
     fn cross_keeps_group_chunks_from_either_parent() {

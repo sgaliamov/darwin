@@ -98,4 +98,40 @@ mod tests {
             .that(&config)
             .is_equal_to(Config::default());
     }
+
+    /// `mutant_count` = ceil(population_size * mutation_ratio), min 1.
+    #[test]
+    fn mutant_count_rounds_up() {
+        let cfg = Config {
+            population_size: 10,
+            mutation_ratio: 0.15, // 10 * 0.15 = 1.5 → ceil = 2
+            ..Default::default()
+        };
+        assert_that!(cfg.mutant_count()).is_equal_to(2);
+    }
+
+    /// Partial JSON overrides only specified fields; rest stay default.
+    #[test]
+    fn partial_json_overrides_fields() {
+        let config: Config = serde_json::from_value(json!({
+            "maxGeneration": 42,
+            "pools": 3
+        }))
+        .unwrap();
+        assert_that!(config.max_generation).is_equal_to(42);
+        assert_that!(config.pools).is_equal_to(3);
+        assert_that!(config.population_size).is_equal_to(Config::default().population_size);
+    }
+
+    /// Seed round-trips through JSON.
+    #[test]
+    fn seed_deserializes_from_json() {
+        let config: Config = serde_json::from_value(json!({
+            "ranges": [[[0, 9]]],
+            "seed": [[1, 2, 3]]
+        }))
+        .unwrap();
+        assert_that!(config.seed).has_length(1);
+        assert_that!(config.seed[0]).is_equal_to(vec![1, 2, 3]);
+    }
 }

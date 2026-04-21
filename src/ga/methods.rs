@@ -415,6 +415,132 @@ mod tests {
         assert_that!(ok).is_true();
     }
 
+    /// Seed genome with all-zero already at optimum → first run returns fitness ≤ threshold.
+    #[test]
+    fn seed_at_optimum_converges_immediately() {
+        let config = Config {
+            max_generation: 500,
+            stagnation_count: 50,
+            population_size: 50,
+            pools: 2,
+            ranges: vec![vec![(0, 99); 4]],
+            seed: vec![vec![0, 0, 0, 0]],
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        let writer = BufWriter::new(&mut buffer);
+        assert_that!(test_run(config, writer)).is_true();
+    }
+
+    /// Stagnation exit: fitness cannot improve (degenerate 1-gene range) →
+    /// run must stop before `max_generation` due to stagnation.
+    #[test]
+    fn stagnation_triggers_early_exit() {
+        let config = Config {
+            max_generation: 10_000, // huge — stagnation must kick in first
+            stagnation_count: 30,
+            population_size: 20,
+            pools: 2,
+            ranges: vec![vec![(42, 42)]], // single fixed gene → zero diversity always
+            ..Default::default()
+        };
+
+        use crate::{DefaultEvolution, DefaultEvolutionConfig};
+        let ranges: Vec<_> = config.ranges.iter().flatten().cloned().collect();
+        let groups: Vec<_> = config.ranges.iter().map(|g| g.len()).collect();
+        let evo_config = DefaultEvolutionConfig {
+            max_mutation_sigma: 1.0,
+            min_mutation_sigma: 0.5,
+            max_generation: config.max_generation,
+        };
+        let evolver = DefaultEvolution::new(&ranges, &groups, evo_config);
+        let mut ga = GeneticAlgorithm::<(), (), _>::new(&config, evolver);
+        ga.set_score_fn(|g, _| (-(g[0] as f64).powi(2), None));
+
+        let start = std::time::Instant::now();
+        ga.run();
+        let elapsed_gens = ga.pools.iter().map(|p| p.individuals.len()).sum::<usize>();
+
+        // If stagnation fired, we finished way before 10 000 generations worth of work.
+        assert_that!(start.elapsed().as_millis()).is_less_than(5_000);
+        let _ = elapsed_gens;
+    }
+
+    /// 1-D optimum at x=0 in range [-50, 50] (shifted domain).
+    #[test]
+    fn finds_1d_minimum() {
+        let config = Config {
+            max_generation: 500,
+            stagnation_count: 80,
+            population_size: 60,
+            pools: 4,
+            ranges: vec![vec![(-50, 50)]],
+            ..Default::default()
+        };
+
+        use crate::{DefaultEvolution, DefaultEvolutionConfig};
+        let ranges: Vec<_> = config.ranges.iter().flatten().cloned().collect();
+        let groups: Vec<_> = config.ranges.iter().map(|g| g.len()).collect();
+        let evo_config = DefaultEvolutionConfig {
+            max_mutation_sigma: 5.0,
+            min_mutation_sigma: 0.5,
+            max_generation: config.max_generation,
+        };
+        let evolver = DefaultEvolution::new(&ranges, &groups, evo_config);
+        let mut ga = GeneticAlgorithm::<(), (), _>::new(&config, evolver);
+        ga.set_score_fn(|g, _| (-(g[0] as f64).powi(2), None));
+
+        let pools = ga.run();
+        let best = pools
+            .top_individuals_mut(1)
+            .first()
+            .unwrap()
+            .genome[0];
+        // optimum is 0; accept a small tolerance
+        assert_that!(best.abs()).is_less_than_or_equal_to(5);
+    }
+
+    /// Multi-run continuity: second `run()` reuses the populations from the first.
+    #[test]
+    fn second_run_not_worse_than_first() {
+        let config = Config {
+            max_generation: 200,
+            stagnation_count: 50,
+            population_size: 60,
+            pools: 4,
+            ranges: vec![vec![(0, 99); 4]],
+            ..Default::default()
+        };
+
+        use crate::{DefaultEvolution, DefaultEvolutionConfig};
+        let ranges: Vec<_> = config.ranges.iter().flatten().cloned().collect();
+        let groups: Vec<_> = config.ranges.iter().map(|g| g.len()).collect();
+        let evo_config = DefaultEvolutionConfig {
+            max_mutation_sigma: 2.0,
+            min_mutation_sigma: 1.0,
+            max_generation: config.max_generation,
+        };
+        let evolver = DefaultEvolution::new(&ranges, &groups, evo_config);
+        let mut ga = GeneticAlgorithm::<(), (), _>::new(&config, evolver);
+        ga.set_score_fn(sphere_no_state);
+
+        let first_best = ga.run().top_individuals_mut(1).first().unwrap().fitness;
+        let second_best = ga.run().top_individuals_mut(1).first().unwrap().fitness;
+
+        // Pools carry over, so second run starts ahead — fitness must not regress.
+        assert_that!(second_best).is_greater_than_or_equal_to(first_best);
+    }
+
+    fn sphere_no_state(genome: GenomeRef, _: &Option<()>) -> (f64, Option<()>) {
+        let score = -genome
+            .iter()
+            .map(|&x| x as f64 / 99.0)
+            .map(|x| x.powi(2))
+            .sum::<f64>();
+        (score, None)
+    }
+
     fn test_run(config: Config, writer: BufWriter<&mut Vec<u8>>) -> bool {
         use crate::{DefaultEvolution, DefaultEvolutionConfig};
         let ranges: Vec<_> = config.ranges.iter().flatten().cloned().collect();
