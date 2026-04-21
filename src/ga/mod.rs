@@ -5,13 +5,10 @@ mod methods;
 mod pool;
 mod pools;
 
-/// Static score calculation function.
-pub type ScoreFn<GaState, IndState> = fn(GenomeRef, &Option<GaState>) -> (f64, Option<IndState>);
-pub use config::*;
-pub use evolution::*;
-pub use genome::*;
-pub use pool::*;
-pub use pools::*;
+pub use evolution::context::*;
+pub use evolution::default_evolution::*;
+pub use evolution::evolver::*;
+pub use evolution::evolution_config::*;
 
 /// Static callback.
 pub type CallbackFn<GaState, IndState> =

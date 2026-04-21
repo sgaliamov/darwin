@@ -74,6 +74,10 @@ impl Default for Config {
             tournament_size: 4,
             bests: 5,
             seed: Default::default(),
+            // tbd: [future, ga] find a better default, now it looks like, that 0 is the best.
+            //      moving all children to one parent pool allows to use seed safely,
+            //      as it won't affect other pools.
+            //      need to collect all linage to see how migration happen;
             migration_factor: 0.000_000_1,
         }
     }

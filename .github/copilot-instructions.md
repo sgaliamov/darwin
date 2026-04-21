@@ -28,6 +28,7 @@ Arrows for causality: X → Y. One word when one word enough. Use memes, pop cul
 Short, smart, elegant — but sane. Pattern matching, functional/fluent style where readable.
 Idiomatic Rust. Meaningful names; short (`x`, `v`, `i`) in simple closures or repetitive cases.
 Remove unnecessary code. Minimalistic. Every method/type gets short comment.
+Don't remove existing comments unless they are wrong or misleading.
 
 ---
 
