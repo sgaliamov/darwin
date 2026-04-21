@@ -28,15 +28,10 @@ impl DefaultEvolution {
         }
     }
 
-    fn sigma(&self, generation: usize) -> f32 {
-        self.config.sigma(generation)
-    }
-
     /// Core mutation logic — applies Gaussian noise scaled by `noise_factor`.
-    fn mutant_with_noise(&self, genome: GenomeRef, sigma: f32, noise_factor: f32) -> Option<Genome> {
-        let mut rng = rand::rng();
+    fn mutant_with_noise(&self, genome: GenomeRef, generation: usize, noise_factor: f32, rng: &mut impl rand::Rng) -> Option<Genome> {
         // μ = 0 so shifts are symmetric around the original value.
-        let normal = Normal::new(0.0_f32, sigma).expect("`sigma` should be valid.");
+        let normal = Normal::new(0.0_f32, self.config.sigma(generation)).expect("`sigma` should be valid.");
         genome
             .iter()
             .enumerate()
@@ -45,7 +40,7 @@ impl DefaultEvolution {
                 if range.0 == range.1 {
                     return Some(*g);
                 }
-                let shift = (normal.sample(&mut rng) * noise_factor).round() as Gene;
+                let shift = (normal.sample(rng) * noise_factor).round() as Gene;
                 let new = g + shift;
                 if new < range.0 || new > range.1 { None } else { Some(new) }
             })
@@ -72,10 +67,9 @@ impl Evolver for DefaultEvolution {
     /// Return a *mutated copy* of the given genome.
     /// Mutants that fall outside the allowed range are discarded (returns `None`).
     fn mutant(&self, genome: GenomeRef, ctx: &Context) -> Option<Genome> {
-        let sigma = self.sigma(ctx.generation);
         // High diversity -> lower noise (exploit). High stagnation -> higher noise (explore).
         let noise_factor = (1.0 - ctx.diversity) + ctx.stagnation * ctx.diversity;
-        self.mutant_with_noise(genome, sigma, noise_factor)
+        self.mutant_with_noise(genome, ctx.generation, noise_factor, &mut rand::rng())
     }
 
     /// For each group in `self.groups`, copy that contiguous chunk from one of the
@@ -108,8 +102,7 @@ impl Evolver for DefaultEvolution {
                 child.extend_from_slice(src);
             });
 
-        let sigma = self.sigma(ctx.generation);
-        self.mutant_with_noise(&child, sigma, self.config.cross_noise_factor)
+        self.mutant_with_noise(&child, ctx.generation, self.config.cross_noise_factor, &mut rng)
             .into_iter()
             .chain(iter::once(child))
             .collect()
