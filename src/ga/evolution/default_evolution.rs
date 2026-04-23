@@ -28,10 +28,10 @@ impl DefaultEvolution {
     }
 
     /// Core mutation logic — applies Gaussian noise derived from `ctx`.
-    fn mutant_with_noise(
+    fn mutant_with_noise<GaState>(
         &self,
         genome: GenomeRef,
-        ctx: &Context,
+        ctx: &Context<'_, GaState>,
         noise_factor: f32,
         rng: &mut impl rand::Rng,
     ) -> Option<Genome> {
@@ -58,7 +58,7 @@ impl DefaultEvolution {
     }
 }
 
-impl Evolver for DefaultEvolution {
+impl<GaState: Sync> Evolver<GaState> for DefaultEvolution {
     /// Create a random genome.
     fn generate(&self) -> Genome {
         let mut rng = rand::rng();
@@ -76,14 +76,14 @@ impl Evolver for DefaultEvolution {
 
     /// Return a *mutated copy* of the given genome.
     /// Mutants that fall outside the allowed range are discarded (returns `None`).
-    fn mutant(&self, genome: GenomeRef, ctx: &Context) -> Option<Genome> {
+    fn mutant(&self, genome: GenomeRef, ctx: &Context<'_, GaState>) -> Option<Genome> {
         self.mutant_with_noise(genome, ctx, ctx.noise_factor(), &mut rand::rng())
     }
 
     /// For each group in `self.groups`, copy that contiguous chunk from one of the
     /// parents (50 / 50), preserving group boundaries.
     /// Returns `[maybe_mutant, pure_child]` — mutant first if produced.
-    fn cross(&self, dad: GenomeRef, mom: GenomeRef, ctx: &Context) -> Vec<Genome> {
+    fn cross(&self, dad: GenomeRef, mom: GenomeRef, ctx: &Context<'_, GaState>) -> Vec<Genome> {
         debug_assert_eq!(dad.len(), mom.len(), "parents must be same length");
         debug_assert_eq!(
             self.groups.iter().sum::<usize>(),
@@ -133,7 +133,7 @@ mod tests {
         let ranges: Vec<_> = vec![(0, 9), (10, 19), (100, 200)];
         let evo = make_evo(&ranges);
         for _ in 0..100 {
-            let g = evo.generate();
+            let g = <DefaultEvolution as Evolver<()>>::generate(&evo);
             for (gene, &(lo, hi)) in g.iter().zip(ranges.iter()) {
                 assert!(*gene >= lo && *gene <= hi, "gene {gene} out of [{lo},{hi}]");
             }
@@ -150,6 +150,7 @@ mod tests {
             generation: 0,
             diversity: 1.0,
             stagnation: 0.0,
+            state: &None::<()>,
         };
         let mut same = 0usize;
         for _ in 0..100 {
@@ -180,6 +181,7 @@ mod tests {
             generation: 0,
             diversity: 0.0,
             stagnation: 0.0,
+            state: &None::<()>,
         };
         // mutants that land outside the range return None — verify any Some is in range
         for _ in 0..200 {
@@ -197,8 +199,8 @@ mod tests {
             &groups,
             DefaultEvolutionConfig::default(),
         );
-        let mom = evolver.generate();
-        let dad = evolver.generate();
+        let mom = <DefaultEvolution as Evolver<()>>::generate(&evolver);
+        let dad = <DefaultEvolution as Evolver<()>>::generate(&evolver);
 
         let children = evolver.cross(
             &dad,
@@ -208,6 +210,7 @@ mod tests {
                 generation: 0,
                 diversity: 1.0,
                 stagnation: 0.0,
+                state: &None::<()>,
             },
         );
         let child = &children[1];

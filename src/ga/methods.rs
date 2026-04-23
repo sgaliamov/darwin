@@ -6,7 +6,7 @@ use itertools::Itertools;
 use rand::prelude::*;
 use rayon::prelude::*;
 
-impl<'a, GaState, IndState, E: Evolver> GeneticAlgorithm<'a, GaState, IndState, E>
+impl<'a, GaState, IndState, E: Evolver<GaState>> GeneticAlgorithm<'a, GaState, IndState, E>
 where
     GaState: Sync,
     IndState: Send + Sync,
@@ -87,6 +87,7 @@ where
         self.callback_fn = callback_fn;
     }
 
+    /// Optional external state can be set for use in `score_fn` and `callback_fn`.
     pub fn set_state(&mut self, state: GaState) {
         self.state = Some(state);
     }
@@ -97,7 +98,6 @@ where
     pub fn run(&mut self) -> &mut Pools<IndState> {
         self.reset();
 
-        // tbd: [future, ga] after finding a good individual, reset all pools at the end, add it as a seed and restart evolution one more time.
         // tbd: [future, ga] identical pools should be merged to save computation time.
         for generation in 0..=self.config.max_generation {
             self.mutate(generation);
@@ -187,6 +187,7 @@ where
         // par_iter_mut can take a mutable borrow of pools independently.
         let evolver = &self.evolver;
         let mutant_count = self.mutant_count;
+        let state = &self.state;
 
         self.pools.par_iter_mut().for_each(|pool| {
             if pool.individuals.is_empty() {
@@ -199,6 +200,7 @@ where
                 generation,
                 diversity: pool.diversity(),
                 stagnation: stagnation_boost,
+                state,
             };
 
             let mutants = pool.individuals[..m]
@@ -229,6 +231,7 @@ where
             crossover_size,
             evolver,
             mutant_count,
+            state,
             config: Config {
                 tournament_size, ..
             },
@@ -240,6 +243,7 @@ where
         let mutant_count = *mutant_count;
         // Coerce to shared ref so the closure is Sync (E: Evolver: Sync).
         let evolver: &E = evolver;
+        let state: &Option<GaState> = state;
 
         let offspring: Vec<_> = pools
             .pairs(generation)
@@ -272,6 +276,7 @@ where
                                 generation,
                                 diversity,
                                 stagnation: stagnation_boost,
+                                state,
                             },
                         ) {
                             kids.push(Individual::new(g, Lineage::Child(generation, ga, gb)));

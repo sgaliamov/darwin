@@ -22,7 +22,7 @@ pub type CallbackFn<GaState, IndState> =
     fn(usize, &Option<(Genome, f64)>, &Pools<IndState>, &mut Option<GaState>);
 
 //  Evolution engine
-pub struct GeneticAlgorithm<'a, GaState, IndState, E: Evolver> {
+pub struct GeneticAlgorithm<'a, GaState, IndState, E: Evolver<GaState>> {
     /// Flat genome ranges
     ranges: GeneRanges,
 
