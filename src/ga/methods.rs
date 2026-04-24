@@ -66,7 +66,7 @@ where
         }
 
         Self {
-            ranges,
+            flat_genome: ranges,
             score_fn: |_, _| (f64::NAN, None),
             callback_fn: |_, _, _, _| {},
             state: None,
@@ -150,7 +150,7 @@ where
             pool.individuals.truncate(self.config.population_size);
 
             // diversity need to be updated before callback to provide actual state.
-            pool.calc_diversity(&self.ranges);
+            pool.calc_diversity(&self.flat_genome);
         });
     }
 

@@ -33,7 +33,6 @@ pub trait Crossover<GaState>: Send + Sync {
     fn cross(&self, dad: GenomeRef, mom: GenomeRef, ctx: &Context<'_, GaState>) -> Vec<Genome>;
 }
 
-
 /// Static score calculation function.
 pub type ScoreFn<GaState, IndState> = fn(GenomeRef, &Option<GaState>) -> (f64, Option<IndState>);
 
@@ -48,9 +47,6 @@ where
     M: Mutator<GaState>,
     C: Crossover<GaState>,
 {
-    /// Flat genome ranges
-    ranges: GeneRanges,
-
     /// GA configuration.
     config: &'a Config,
 
@@ -83,8 +79,10 @@ where
     /// Crossover operator.
     crossover: C,
 
+    /// Flat genome ranges
+    flat_genome: GeneRanges,
+
     // --- Cached scalars for quick access ------------------------------------
-    //
     mutant_count: usize,
     immigrant_count: usize,
     crossover_size: usize,
