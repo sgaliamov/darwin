@@ -1,4 +1,4 @@
-use crate::{Gene, GeneRanges, Genome};
+use crate::{Gene, Genome, RangeSet};
 use serde::Deserialize;
 
 // tbd: [future, ga] type of ranges can be generic.
@@ -12,7 +12,7 @@ use serde::Deserialize;
 )]
 pub struct Config<G: Gene> {
     /// Defines amount of genes and their ranges.
-    pub ranges: Vec<GeneRanges<G>>,
+    pub ranges: RangeSet<G>,
 
     /// How many mutants will be generated from top individuals.
     pub mutation_ratio: f32,

@@ -1,5 +1,5 @@
 use super::{mutant_with_noise, noise_factor};
-use darwin::{Context, Crossover, Gene, GeneRanges, GeneRangesRef, Genome, GenomeRef, Sigma};
+use darwin::{Context, Crossover, Gene, GeneRanges, Genome, GenomeRef, RangeSet, Sigma};
 use rand::RngExt;
 use std::iter;
 use std::ops::Add;
@@ -12,12 +12,12 @@ pub struct DefaultCrossover<G> {
 }
 
 impl<G: Gene + Add<Output = G> + TryFrom<i64>> DefaultCrossover<G> {
-    // todo: use vector of ranges and calculate groups from it
-    pub fn new(ranges: GeneRangesRef<G>, groups: &[usize], config: Sigma) -> Self {
-        assert!(!groups.is_empty());
+    /// `range_set` — one `GeneRanges` per group; groups and flat ranges are derived from it.
+    pub fn new(range_set: &RangeSet<G>, config: Sigma) -> Self {
+        assert!(!range_set.is_empty());
         Self {
-            ranges: ranges.to_vec(),
-            groups: groups.to_vec(),
+            groups: range_set.iter().map(|r| r.len()).collect(),
+            ranges: range_set.iter().flatten().copied().collect(),
             config,
         }
     }
@@ -80,11 +80,12 @@ mod tests {
 
     #[test]
     fn cross_keeps_group_chunks_from_either_parent() {
-        let groups = vec![2, 1];
-        let ranges: Vec<(i64, i64)> = vec![(0, 9), (10, 19), (20, 29)];
+        let range_set: RangeSet<i64> = vec![vec![(0, 9), (10, 19)], vec![(20, 29)]];
+        let ranges: Vec<(i64, i64)> = range_set.iter().flatten().copied().collect();
+        let groups: Vec<usize> = range_set.iter().map(|r| r.len()).collect();
         let config = Sigma::default();
         let generator = DefaultGenerator::new(&ranges);
-        let crossover = DefaultCrossover::new(&ranges, &groups, config);
+        let crossover = DefaultCrossover::new(&range_set, config);
 
         let mom = generator.generate();
         let dad = generator.generate();
