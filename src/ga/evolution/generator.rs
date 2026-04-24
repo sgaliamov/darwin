@@ -1,22 +1,23 @@
-use crate::{GeneRanges, GeneRangesRef, Generator, Genome};
+use crate::{Gene, GeneRanges, GeneRangesRef, Generator, Genome};
 use rand::RngExt;
+use rand::distr::uniform::SampleUniform;
 
 /// Generates random genomes from declared ranges.
-pub struct DefaultGenerator {
-    ranges: GeneRanges,
+pub struct DefaultGenerator<G> {
+    ranges: GeneRanges<G>,
 }
 
-impl DefaultGenerator {
-    pub fn new(ranges: GeneRangesRef) -> Self {
+impl<G: Gene + SampleUniform> DefaultGenerator<G> {
+    pub fn new(ranges: GeneRangesRef<G>) -> Self {
         Self {
             ranges: ranges.to_vec(),
         }
     }
 }
 
-impl Generator for DefaultGenerator {
+impl<G: Gene + SampleUniform> Generator<G> for DefaultGenerator<G> {
     /// Produce a random genome; each gene is drawn uniformly from its range.
-    fn generate(&self) -> Genome {
+    fn generate(&self) -> Genome<G> {
         let mut rng = rand::rng();
         self.ranges
             .iter()
@@ -38,7 +39,7 @@ mod tests {
     /// Every gene of `generate()` must stay within its declared range.
     #[test]
     fn random_genome_stays_in_range() {
-        let ranges = vec![(0, 9), (10, 19), (100, 200)];
+        let ranges: Vec<(i64, i64)> = vec![(0, 9), (10, 19), (100, 200)];
         let generator = DefaultGenerator::new(&ranges);
         for _ in 0..100 {
             let g = generator.generate();

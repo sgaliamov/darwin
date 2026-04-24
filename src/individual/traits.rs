@@ -1,6 +1,6 @@
 use crate::{Individual, Lineage};
 
-impl<IndState> Default for Individual<IndState> {
+impl<G, IndState> Default for Individual<G, IndState> {
     fn default() -> Self {
         Self {
             genome: Default::default(),
@@ -23,7 +23,7 @@ impl std::fmt::Display for Lineage {
     }
 }
 
-impl<IndState> std::fmt::Display for Individual<IndState> {
+impl<G: std::fmt::Debug, IndState> std::fmt::Display for Individual<G, IndState> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{} {:?}", self.name(), self.genome)
     }

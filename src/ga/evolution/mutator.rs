@@ -1,13 +1,16 @@
-use crate::{Context, GeneRanges, GeneRangesRef, Genome, GenomeRef, Mutator, Sigma};
+use crate::{Context, Gene, GeneRanges, GeneRangesRef, Genome, GenomeRef, Mutator};
+use rand::distr::uniform::SampleUniform;
+use std::ops::Add;
+use super::{Sigma, noise_factor, mutant_with_noise};
 
 /// Produces mutated genome copies via Gaussian noise.
-pub struct DefaultMutator {
-    ranges: GeneRanges,
+pub struct DefaultMutator<G> {
+    ranges: GeneRanges<G>,
     config: Sigma,
 }
 
-impl DefaultMutator {
-    pub fn new(ranges: GeneRangesRef, config: Sigma) -> Self {
+impl<G: Gene + SampleUniform + Add<Output = G> + TryFrom<i64>> DefaultMutator<G> {
+    pub fn new(ranges: GeneRangesRef<G>, config: Sigma) -> Self {
         Self {
             ranges: ranges.to_vec(),
             config,
@@ -15,18 +18,17 @@ impl DefaultMutator {
     }
 }
 
-impl<GaState: Sync> Mutator<GaState> for DefaultMutator {
+impl<G, GaState> Mutator<G, GaState> for DefaultMutator<G>
+where
+    G: Gene + Add<Output = G> + TryFrom<i64>,
+    GaState: Sync,
+{
     /// Return a *mutated copy* of the given genome.
     /// Mutants that fall outside the allowed range are discarded (returns `None`).
-    fn mutant(&self, genome: GenomeRef, ctx: &Context<'_, GaState>) -> Option<Genome> {
-        super::mutant_with_noise(
-            &self.ranges,
-            &self.config,
-            genome,
-            ctx,
-            ctx.noise_factor(),
-            &mut rand::rng(),
-        )
+    fn mutant(&self, genome: GenomeRef<G>, ctx: &Context<'_, G, GaState>) -> Option<Genome<G>> {
+        let sigma = self.config.get(ctx.generation, ctx.config.max_generation);
+        let noise = noise_factor(ctx.diversity, ctx.stagnation);
+        mutant_with_noise(&self.ranges, sigma, genome, noise, &mut rand::rng())
     }
 }
 
@@ -39,7 +41,7 @@ mod tests {
     /// `mutant` with low sigma and high diversity (noise≈0) almost always returns the same genome.
     #[test]
     fn mutant_with_zero_noise_returns_same_genome() {
-        let mutator = DefaultMutator::new(&[(0, 1_000_000)], Sigma::default());
+        let mutator = DefaultMutator::new(&[(0i64, 1_000_000)], Sigma::default());
         let genome = vec![500_000i64];
         // diversity=1, stagnation=0 → noise_factor=0 → shift is ~0 almost always
         let ga_cfg = Config::default();
@@ -65,14 +67,14 @@ mod tests {
     #[test]
     fn mutant_never_exceeds_range() {
         let mutator = DefaultMutator::new(
-            &[(0, 10)],
+            &[(0i64, 10)],
             Sigma {
                 max: 1000.0,
                 min: 500.0,
             },
         );
         let genome = vec![5i64];
-        let ga_cfg = Config {
+        let ga_cfg = Config::<i64> {
             max_generation: 100,
             ..Config::default()
         };

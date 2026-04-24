@@ -1,20 +1,32 @@
-/// One gene.
-/// Signed type is used as it can be in a domain where negative genes may have sense.
-pub type Gene = i64;
+use std::fmt::Debug;
+use std::ops::Sub;
 
-/// Organism definition.
-pub type Genome = Vec<Gene>;
+/// Core constraint for gene values.
+/// Integer-like types: ordered, subtractable, and castable to `f64`.
+/// Arithmetic beyond subtraction belongs to the evolution implementations.
+pub trait Gene: Copy + Ord + Sub<Output = Self> + Debug + Send + Sync + 'static {
+    fn to_f64(self) -> f64;
+}
 
-/// Organism definition as a reference.
-/// Not just a reference to a vector but a reference to a slice.
-pub type GenomeRef<'a> = &'a [Gene];
+macro_rules! impl_gene {
+    ($($t:ty),*) => {
+        $(impl Gene for $t { fn to_f64(self) -> f64 { self as f64 } })*
+    };
+}
 
-/// Defines min and max values for a gene.
-/// Inclusive.
-/// No need to validate, as it happens in `Rng::random_range`.
-pub type GeneRange = (Gene, Gene);
+impl_gene!(i8, i16, i32, i64, i128, isize, u8, u16, u32, u64, u128, usize);
 
-/// Defines amount of genes and their ranges.
-/// Left and right values are inclusive.
-pub type GeneRanges = Vec<GeneRange>;
-pub type GeneRangesRef<'a> = &'a [GeneRange];
+/// Flat DNA sequence.
+pub type Genome<G> = Vec<G>;
+
+/// Borrowed DNA slice.
+pub type GenomeRef<'a, G> = &'a [G];
+
+/// Inclusive `[min, max]` range for one gene.
+pub type GeneRange<G> = (G, G);
+
+/// Per-gene ranges for a full genome.
+pub type GeneRanges<G> = Vec<GeneRange<G>>;
+
+/// Borrowed per-gene ranges.
+pub type GeneRangesRef<'a, G> = &'a [GeneRange<G>];

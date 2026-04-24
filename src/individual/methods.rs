@@ -1,13 +1,13 @@
 use crate::{Genome, Individual, Lineage, ScoreFn};
 
-impl<IndState> Individual<IndState> {
+impl<G, IndState> Individual<G, IndState> {
     /// Name without genome.
     pub fn name(&self) -> String {
         format!("ω{:.6} | {:<8}", self.fitness, self.lineage.to_string())
     }
 
     /// Main constructor.
-    pub fn new(genome: Genome, lineage: Lineage) -> Self {
+    pub fn new(genome: Genome<G>, lineage: Lineage) -> Self {
         Self {
             lineage,
             genome,
@@ -16,14 +16,14 @@ impl<IndState> Individual<IndState> {
         }
     }
 
-    pub fn firstborn(generation: usize, genome: Genome) -> Self {
+    pub fn firstborn(generation: usize, genome: Genome<G>) -> Self {
         Self::new(genome, Lineage::Firstborn(generation))
     }
 
     /// Compute and cache fitness. Idempotent.
     pub fn evaluate<GaState>(
         &mut self,
-        score: &ScoreFn<GaState, IndState>,
+        score: &ScoreFn<G, GaState, IndState>,
         state: &Option<GaState>,
     ) {
         if !self.fitness.is_finite() {
@@ -44,15 +44,15 @@ mod tests {
     /// Freshly constructed individual has NaN fitness.
     #[test]
     fn new_individual_has_nan_fitness() {
-        let ind = Individual::<()>::firstborn(0, vec![1, 2, 3]);
+        let ind = Individual::<i64, ()>::firstborn(0, vec![1, 2, 3]);
         assert_that!(ind.fitness.is_nan()).is_true();
     }
 
     /// `evaluate` sets fitness on first call.
     #[test]
     fn evaluate_sets_fitness() {
-        let score: ScoreFn<(), ()> = const_score;
-        let mut ind = Individual::<()>::firstborn(0, vec![1, 2, 3]);
+        let score: ScoreFn<i64, (), ()> = const_score;
+        let mut ind = Individual::<i64, ()>::firstborn(0, vec![1, 2, 3]);
         ind.evaluate(&score, &None);
         assert_that!(ind.fitness).is_equal_to(3.0);
     }
@@ -60,8 +60,8 @@ mod tests {
     /// `evaluate` is idempotent — second call does not re-score.
     #[test]
     fn evaluate_is_idempotent() {
-        let score: ScoreFn<(), ()> = const_score;
-        let mut ind = Individual::<()>::firstborn(0, vec![1, 2, 3]);
+        let score: ScoreFn<i64, (), ()> = const_score;
+        let mut ind = Individual::<i64, ()>::firstborn(0, vec![1, 2, 3]);
         ind.evaluate(&score, &None);
         // Override the genome to verify score is NOT recomputed.
         ind.genome = vec![9, 9, 9, 9, 9];
@@ -72,7 +72,7 @@ mod tests {
     /// `firstborn` wraps genome in Firstborn lineage at given generation.
     #[test]
     fn firstborn_lineage_matches_generation() {
-        let ind = Individual::<()>::firstborn(5, vec![0]);
+        let ind = Individual::<i64, ()>::firstborn(5, vec![0]);
         assert!(matches!(ind.lineage, Lineage::Firstborn(5)));
     }
 }

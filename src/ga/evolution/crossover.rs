@@ -1,17 +1,19 @@
-use crate::{Context, Crossover, GeneRanges, GeneRangesRef, Genome, GenomeRef, Sigma};
+use crate::{Context, Crossover, Gene, GeneRanges, GeneRangesRef, Genome, GenomeRef};
 use rand::RngExt;
 use std::iter;
+use std::ops::Add;
+use super::{Sigma, noise_factor, mutant_with_noise};
 
 /// Produces offspring by group-chunked crossover, with optional post-cross mutation.
-pub struct DefaultCrossover {
-    ranges: GeneRanges,
+pub struct DefaultCrossover<G> {
+    ranges: GeneRanges<G>,
     groups: Vec<usize>,
     config: Sigma,
 }
 
-impl DefaultCrossover {
+impl<G: Gene + Add<Output = G> + TryFrom<i64>> DefaultCrossover<G> {
     // todo: use vector of ranges and calculate groups from it
-    pub fn new(ranges: GeneRangesRef, groups: &[usize], config: Sigma) -> Self {
+    pub fn new(ranges: GeneRangesRef<G>, groups: &[usize], config: Sigma) -> Self {
         assert!(!groups.is_empty());
         Self {
             ranges: ranges.to_vec(),
@@ -21,11 +23,20 @@ impl DefaultCrossover {
     }
 }
 
-impl<GaState: Sync> Crossover<GaState> for DefaultCrossover {
+impl<G, GaState> Crossover<G, GaState> for DefaultCrossover<G>
+where
+    G: Gene + Add<Output = G> + TryFrom<i64>,
+    GaState: Sync,
+{
     /// For each group in `self.groups`, copy that contiguous chunk from one of the
     /// parents (50 / 50), preserving group boundaries.
     /// Returns `[maybe_mutant, pure_child]` — mutant first if produced.
-    fn cross(&self, dad: GenomeRef, mom: GenomeRef, ctx: &Context<'_, GaState>) -> Vec<Genome> {
+    fn cross(
+        &self,
+        dad: GenomeRef<G>,
+        mom: GenomeRef<G>,
+        ctx: &Context<'_, G, GaState>,
+    ) -> Vec<Genome<G>> {
         debug_assert_eq!(dad.len(), mom.len(), "parents must be same length");
         debug_assert_eq!(
             self.groups.iter().sum::<usize>(),
@@ -52,17 +63,12 @@ impl<GaState: Sync> Crossover<GaState> for DefaultCrossover {
                 child.extend_from_slice(src);
             });
 
-        super::mutant_with_noise(
-            &self.ranges,
-            &self.config,
-            &child,
-            ctx,
-            ctx.noise_factor(),
-            &mut rng,
-        )
-        .into_iter()
-        .chain(iter::once(child))
-        .collect()
+        let sigma = self.config.get(ctx.generation, ctx.config.max_generation);
+        let noise = noise_factor(ctx.diversity, ctx.stagnation);
+        mutant_with_noise(&self.ranges, sigma, &child, noise, &mut rng)
+            .into_iter()
+            .chain(iter::once(child))
+            .collect()
     }
 }
 
@@ -74,7 +80,7 @@ mod tests {
     #[test]
     fn cross_keeps_group_chunks_from_either_parent() {
         let groups = vec![2, 1];
-        let ranges = vec![(0, 9), (10, 19), (20, 29)];
+        let ranges: Vec<(i64, i64)> = vec![(0, 9), (10, 19), (20, 29)];
         let config = Sigma::default();
         let generator = DefaultGenerator::new(&ranges);
         let crossover = DefaultCrossover::new(&ranges, &groups, config);

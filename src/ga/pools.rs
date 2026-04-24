@@ -8,46 +8,46 @@ use std::ops::{Deref, DerefMut};
 /// Wraps a vector of pools and provides transparent access to vector methods
 /// through `Deref` and `DerefMut` traits.
 #[derive(Debug)]
-pub struct Pools<IndState>(Vec<Pool<IndState>>);
+pub struct Pools<G, IndState>(Vec<Pool<G, IndState>>);
 
-impl<IndState> Pools<IndState> {
+impl<G, IndState> Pools<G, IndState> {
     /// Create a new collection with the specified capacity.
     pub fn with_capacity(capacity: usize) -> Self {
         Self(Vec::with_capacity(capacity))
     }
 
     /// Create from an existing vector of pools.
-    pub fn from_vec(pools: Vec<Pool<IndState>>) -> Self {
+    pub fn from_vec(pools: Vec<Pool<G, IndState>>) -> Self {
         Self(pools)
     }
 
     /// Get the inner vector.
-    pub fn into_inner(self) -> Vec<Pool<IndState>> {
+    pub fn into_inner(self) -> Vec<Pool<G, IndState>> {
         self.0
     }
 }
 
-impl<IndState> Deref for Pools<IndState> {
-    type Target = Vec<Pool<IndState>>;
+impl<G, IndState> Deref for Pools<G, IndState> {
+    type Target = Vec<Pool<G, IndState>>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl<IndState> DerefMut for Pools<IndState> {
+impl<G, IndState> DerefMut for Pools<G, IndState> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
 }
 
-impl<IndState> Default for Pools<IndState> {
+impl<G, IndState> Default for Pools<G, IndState> {
     fn default() -> Self {
         Self(Vec::new())
     }
 }
 
-impl<IndState> Pools<IndState> {
+impl<G, IndState> Pools<G, IndState> {
     /// Precompute all pool pairs for this generation.
     pub fn pairs(&self, generation: usize) -> Vec<(usize, usize)> {
         let pool_count = self.len();
@@ -80,7 +80,7 @@ impl<IndState> Pools<IndState> {
 
     /// Collect all individuals from all pools, sort by fitness (best-first),
     /// and return the top `count` mutable references.
-    pub fn top_individuals_mut(&mut self, count: usize) -> Vec<&mut Individual<IndState>> {
+    pub fn top_individuals_mut(&mut self, count: usize) -> Vec<&mut Individual<G, IndState>> {
         self.iter_mut()
             .flat_map(|pool| pool.individuals.iter_mut())
             .sorted_by(|a, b| b.fitness.total_cmp(&a.fitness))
@@ -95,7 +95,7 @@ mod tests {
     use crate::Individual;
     use spectral::prelude::*;
 
-    fn make_pools(fitness_per_pool: &[&[f64]]) -> Pools<()> {
+    fn make_pools(fitness_per_pool: &[&[f64]]) -> Pools<(), ()> {
         let pools = fitness_per_pool
             .iter()
             .enumerate()
@@ -103,7 +103,7 @@ mod tests {
                 let individuals = fitnesses
                     .iter()
                     .map(|&f| {
-                        let mut ind = Individual::<()>::firstborn(0, vec![]);
+                        let mut ind = Individual::<(), ()>::firstborn(0, vec![]);
                         ind.fitness = f;
                         ind
                     })
@@ -151,7 +151,7 @@ mod tests {
     fn pair_never_returns_self() {
         for g in 0..10 {
             for pool in 0..3 {
-                if let Some(partner) = Pools::<()>::pair(3, pool, g) {
+                if let Some(partner) = Pools::<(), ()>::pair(3, pool, g) {
                     assert_ne!(partner, pool);
                 }
             }
@@ -185,7 +185,7 @@ mod tests {
 
         for (pools, idx, gnr, expected) in test_cases {
             asserting(&format!("pools={pools} idx={idx} gnr={gnr}"))
-                .that(&Pools::<()>::pair(pools, idx, gnr))
+                .that(&Pools::<(), ()>::pair(pools, idx, gnr))
                 .is_equal_to(expected);
         }
     }

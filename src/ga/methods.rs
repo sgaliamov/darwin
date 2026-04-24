@@ -1,19 +1,20 @@
-﻿use crate::{
+﻿use crate::{Gene,
     CallbackFn, Config, Context, Crossover, Generator, GeneticAlgorithm, Individual, Lineage, Mutator, Pool, Pools, ScoreFn
 };
 use itertools::Itertools;
 use rand::prelude::*;
 use rayon::prelude::*;
 
-impl<'a, GaState, IndState, G, M, C> GeneticAlgorithm<'a, GaState, IndState, G, M, C>
+impl<'a, G, GaState, IndState, Gen, M, C> GeneticAlgorithm<'a, G, GaState, IndState, Gen, M, C>
 where
+    G: Gene,
     GaState: Sync,
     IndState: Send + Sync,
-    G: Generator,
-    M: Mutator<GaState>,
-    C: Crossover<GaState>,
+    Gen: Generator<G>,
+    M: Mutator<G, GaState>,
+    C: Crossover<G, GaState>,
 {
-    pub fn new(config: &'a Config, generator: G, mutator: M, crossover: C) -> Self {
+    pub fn new(config: &'a Config<G>, generator: Gen, mutator: M, crossover: C) -> Self {
         assert!(config.stagnation_count > 0, "stall_generations must be > 0");
         assert!((0.0..1.0).contains(&config.crossover_ratio));
         assert!(config.random_ratio >= 0.0, "random_ratio must be >= 0");
@@ -83,11 +84,11 @@ where
         }
     }
 
-    pub fn set_score_fn(&mut self, score_fn: ScoreFn<GaState, IndState>) {
+    pub fn set_score_fn(&mut self, score_fn: ScoreFn<G, GaState, IndState>) {
         self.score_fn = score_fn;
     }
 
-    pub fn set_callback_fn(&mut self, callback_fn: CallbackFn<GaState, IndState>) {
+    pub fn set_callback_fn(&mut self, callback_fn: CallbackFn<G, GaState, IndState>) {
         self.callback_fn = callback_fn;
     }
 
@@ -99,7 +100,7 @@ where
     /// Run the evolutionary loop and return a mutable reference to all pools.
     /// Callers can extract top individuals using [`Pools::top_individuals`].
     /// Pools are preserved between runs to allow reusing individuals in subsequent iterations.
-    pub fn run(&mut self) -> &mut Pools<IndState> {
+    pub fn run(&mut self) -> &mut Pools<G, IndState> {
         self.reset();
 
         // tbd: [future, ga] identical pools should be merged to save computation time.
@@ -357,22 +358,22 @@ mod tests {
     use spectral::prelude::*;
     use std::io::{BufWriter, Write};
 
-    type State<'a> = (&'a Config, BufWriter<&'a mut Vec<u8>>);
+    type State<'a> = (&'a Config<i64>, BufWriter<&'a mut Vec<u8>>);
 
     /// Fitness = ∑x² → 0 at the origin.
-    fn sphere(genome: GenomeRef, _state: &Option<State>) -> (f64, Option<()>) {
+    fn sphere(genome: GenomeRef<i64>, _state: &Option<State>) -> (f64, Option<()>) {
         let score = -genome
             .iter()
             .map(|&x| x as f64 / 99.0)
-            .map(|x| x.powi(2))
+            .map(|x: f64| x.powi(2))
             .sum::<f64>();
         (score, Some(()))
     }
 
     fn callback_fn(
         g: usize,
-        _: &Option<(Genome, f64)>,
-        pools: &Pools<()>,
+        _: &Option<(Genome<i64>, f64)>,
+        pools: &Pools<i64, ()>,
         state: &mut Option<State>,
     ) {
         let (config, writer) = state.as_mut().unwrap();
@@ -404,7 +405,7 @@ mod tests {
 
     #[test]
     fn finds_origin_within_ten_runs() {
-        let config = Config {
+        let config: Config<i64> = Config {
             max_generation: 1_000,
             stagnation_count: 100,
             population_size: 100,
@@ -429,7 +430,7 @@ mod tests {
     /// Seed genome with all-zero already at optimum → first run returns fitness ≤ threshold.
     #[test]
     fn seed_at_optimum_converges_immediately() {
-        let config = Config {
+        let config: Config<i64> = Config {
             max_generation: 500,
             stagnation_count: 50,
             population_size: 50,
@@ -448,7 +449,7 @@ mod tests {
     /// run must stop before `max_generation` due to stagnation.
     #[test]
     fn stagnation_triggers_early_exit() {
-        let config = Config {
+        let config: Config<i64> = Config {
             max_generation: 10_000, // huge — stagnation must kick in first
             stagnation_count: 30,
             population_size: 20,
@@ -467,7 +468,7 @@ mod tests {
         let generator = DefaultGenerator::new(&ranges);
         let mutator = DefaultMutator::new(&ranges, evo_config.clone());
         let crossover = DefaultCrossover::new(&ranges, &groups, evo_config);
-        let mut ga = GeneticAlgorithm::<(), (), _, _, _>::new(&config, generator, mutator, crossover);
+        let mut ga = GeneticAlgorithm::<i64, (), (), _, _, _>::new(&config, generator, mutator, crossover);
         ga.set_score_fn(|g, _| (-(g[0] as f64).powi(2), None));
 
         let start = std::time::Instant::now();
@@ -482,7 +483,7 @@ mod tests {
     /// 1-D optimum at x=0 in range [-50, 50] (shifted domain).
     #[test]
     fn finds_1d_minimum() {
-        let config = Config {
+        let config: Config<i64> = Config {
             max_generation: 500,
             stagnation_count: 80,
             population_size: 60,
@@ -501,7 +502,7 @@ mod tests {
         let generator = DefaultGenerator::new(&ranges);
         let mutator = DefaultMutator::new(&ranges, evo_config.clone());
         let crossover = DefaultCrossover::new(&ranges, &groups, evo_config);
-        let mut ga = GeneticAlgorithm::<(), (), _, _, _>::new(&config, generator, mutator, crossover);
+        let mut ga = GeneticAlgorithm::<i64, (), (), _, _, _>::new(&config, generator, mutator, crossover);
         ga.set_score_fn(|g, _| (-(g[0] as f64).powi(2), None));
 
         let pools = ga.run();
@@ -517,7 +518,7 @@ mod tests {
     /// Multi-run continuity: second `run()` reuses the populations from the first.
     #[test]
     fn second_run_not_worse_than_first() {
-        let config = Config {
+        let config: Config<i64> = Config {
             max_generation: 200,
             stagnation_count: 50,
             population_size: 60,
@@ -536,7 +537,7 @@ mod tests {
         let generator = DefaultGenerator::new(&ranges);
         let mutator = DefaultMutator::new(&ranges, evo_config.clone());
         let crossover = DefaultCrossover::new(&ranges, &groups, evo_config);
-        let mut ga = GeneticAlgorithm::<(), (), _, _, _>::new(&config, generator, mutator, crossover);
+        let mut ga = GeneticAlgorithm::<i64, (), (), _, _, _>::new(&config, generator, mutator, crossover);
         ga.set_score_fn(sphere_no_state);
 
         let first_best = ga.run().top_individuals_mut(1).first().unwrap().fitness;
@@ -546,18 +547,18 @@ mod tests {
         assert_that!(second_best).is_greater_than_or_equal_to(first_best);
     }
 
-    fn sphere_no_state(genome: GenomeRef, _: &Option<()>) -> (f64, Option<()>) {
+    fn sphere_no_state(genome: GenomeRef<i64>, _: &Option<()>) -> (f64, Option<()>) {
         let score = -genome
             .iter()
             .map(|&x| x as f64 / 99.0)
-            .map(|x| x.powi(2))
+            .map(|x: f64| x.powi(2))
             .sum::<f64>();
         (score, None)
     }
 
-    fn test_run(config: Config, writer: BufWriter<&mut Vec<u8>>) -> bool {
+    fn test_run(config: Config<i64>, writer: BufWriter<&mut Vec<u8>>) -> bool {
         use crate::{Sigma, DefaultGenerator, DefaultMutator, DefaultCrossover};
-        let ranges: Vec<_> = config.ranges.iter().flatten().cloned().collect();
+        let ranges: Vec<(i64, i64)> = config.ranges.iter().flatten().cloned().collect();
         let groups: Vec<_> = config.ranges.iter().map(|g| g.len()).collect();
         let evo_config = Sigma {
             max: 2.0,

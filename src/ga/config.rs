@@ -1,14 +1,18 @@
-use crate::{GeneRanges, Genome};
+use crate::{Gene, GeneRanges, Genome};
 use serde::Deserialize;
 
 // tbd: [future, ga] type of ranges can be generic.
 //      it will allow to define them in domain-specific way, like percentages, time intervals, etc.
 /// Generic settings for any genetic algorithms.
-#[derive(Debug, Clone, Deserialize, PartialEq)]
-#[serde(rename_all = "camelCase", default)]
-pub struct Config {
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(
+    rename_all = "camelCase",
+    default,
+    bound(deserialize = "G: serde::de::DeserializeOwned")
+)]
+pub struct Config<G: Gene> {
     /// Defines amount of genes and their ranges.
-    pub ranges: Vec<GeneRanges>,
+    pub ranges: Vec<GeneRanges<G>>,
 
     /// How many mutants will be generated from top individuals.
     pub mutation_ratio: f32,
@@ -45,14 +49,14 @@ pub struct Config {
     pub crossover_ratio: f32,
 
     /// Predefined seed.
-    pub seed: Vec<Genome>,
+    pub seed: Vec<Genome<G>>,
 
     /// Defines how children are distributed between parent's pools.
     /// 0 - all goes to dad, 1 - all goes to mom.
     pub migration_factor: f64,
 }
 
-impl Config {
+impl<G: Gene> Config<G> {
     // todo: better name
     pub fn mutant_count(&self) -> usize {
         (self.population_size as f32 * self.mutation_ratio)
@@ -61,7 +65,7 @@ impl Config {
     }
 }
 
-impl Default for Config {
+impl<G: Gene> Default for Config<G> {
     fn default() -> Self {
         Self {
             ranges: Default::default(),
@@ -92,7 +96,7 @@ mod tests {
 
     #[test]
     fn test_defaults_from_empty_json() {
-        let config: Config =
+        let config: Config<i64> =
             serde_json::from_value(json!({})).expect("failed to deserialize empty JSON");
 
         asserting("default values match")
@@ -103,7 +107,7 @@ mod tests {
     /// `mutant_count` = ceil(population_size * mutation_ratio), min 1.
     #[test]
     fn mutant_count_rounds_up() {
-        let cfg = Config {
+        let cfg = Config::<i64> {
             population_size: 10,
             mutation_ratio: 0.15, // 10 * 0.15 = 1.5 → ceil = 2
             ..Default::default()
@@ -114,25 +118,25 @@ mod tests {
     /// Partial JSON overrides only specified fields; rest stay default.
     #[test]
     fn partial_json_overrides_fields() {
-        let config: Config = serde_json::from_value(json!({
+        let config: Config<i64> = serde_json::from_value(json!({
             "maxGeneration": 42,
             "pools": 3
         }))
         .unwrap();
         assert_that!(config.max_generation).is_equal_to(42);
         assert_that!(config.pools).is_equal_to(3);
-        assert_that!(config.population_size).is_equal_to(Config::default().population_size);
+        assert_that!(config.population_size).is_equal_to(Config::<i64>::default().population_size);
     }
 
     /// Seed round-trips through JSON.
     #[test]
     fn seed_deserializes_from_json() {
-        let config: Config = serde_json::from_value(json!({
+        let config: Config<i64> = serde_json::from_value(json!({
             "ranges": [[[0, 9]]],
             "seed": [[1, 2, 3]]
         }))
         .unwrap();
         assert_that!(config.seed).has_length(1);
-        assert_that!(config.seed[0]).is_equal_to(vec![1, 2, 3]);
+        assert_that!(config.seed[0]).is_equal_to(vec![1i64, 2, 3]);
     }
 }
