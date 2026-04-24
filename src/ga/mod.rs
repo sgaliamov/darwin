@@ -6,10 +6,7 @@ mod pool;
 mod pools;
 
 pub use config::*;
-pub use evolution::context::*;
-pub use evolution::default_evolution::*;
-pub use evolution::evolver::*;
-pub use evolution::config::*;
+pub use evolution::*;
 pub use genome::*;
 pub use pool::*;
 pub use pools::*;
@@ -21,8 +18,13 @@ pub type ScoreFn<GaState, IndState> = fn(GenomeRef, &Option<GaState>) -> (f64, O
 pub type CallbackFn<GaState, IndState> =
     fn(usize, &Option<(Genome, f64)>, &Pools<IndState>, &mut Option<GaState>);
 
-//  Evolution engine
-pub struct GeneticAlgorithm<'a, GaState, IndState, E: Evolver<GaState>> {
+/// Evolution engine with independently injectable genome operations.
+pub struct GeneticAlgorithm<'a, GaState, IndState, G, M, C>
+where
+    G: Generator,
+    M: Mutator<GaState>,
+    C: Crossover<GaState>,
+{
     /// Flat genome ranges
     ranges: GeneRanges,
 
@@ -49,8 +51,14 @@ pub struct GeneticAlgorithm<'a, GaState, IndState, E: Evolver<GaState>> {
     /// Callback to report progress outside each generation.
     callback_fn: CallbackFn<GaState, IndState>,
 
-    /// Injected evolution strategy.
-    evolver: E,
+    /// Random genome generator.
+    generator: G,
+
+    /// Mutation operator.
+    mutator: M,
+
+    /// Crossover operator.
+    crossover: C,
 
     // --- Cached scalars for quick access ------------------------------------
     //

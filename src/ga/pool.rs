@@ -134,7 +134,7 @@ impl<State> Pool<State> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Context, DefaultEvolution, DefaultEvolutionConfig, Evolver, Lineage, Pool};
+    use crate::{Context, DefaultEvolutionConfig, DefaultGenerator, DefaultMutator, Generator, Lineage, Mutator, Pool};
     use itertools::Itertools;
     use rand::{RngExt, SeedableRng, rngs::StdRng};
     use spectral::prelude::*;
@@ -142,10 +142,10 @@ mod tests {
     #[test]
     fn test_diversity() {
         let ranges = &[(0, 1_000); 100];
-        let evo = DefaultEvolution::new(ranges, &[100], DefaultEvolutionConfig::default());
+        let generator = DefaultGenerator::new(ranges);
 
         let individuals = (0..100)
-            .map(|_| Individual::<()>::firstborn(0, <DefaultEvolution as Evolver<()>>::generate(&evo)))
+            .map(|_| Individual::<()>::firstborn(0, generator.generate()))
             .collect_vec();
 
         let mut pool = Pool::new(0, individuals);
@@ -172,12 +172,11 @@ mod tests {
         for &(sigma, tolerance) in test_cases {
             let items = (0..1_000)
                 .filter_map(|g| {
-                    let evo = DefaultEvolution::new(
+                    let mutator = DefaultMutator::new(
                         ranges,
-                        &[1],
                         DefaultEvolutionConfig { max_mutation_sigma: sigma, min_mutation_sigma: sigma, ..Default::default() },
                     );
-                    evo.mutant(&[500], &Context { generation: 0, diversity: 0.5, stagnation: 0.0, state: &None::<()> })
+                    mutator.mutant(&[500], &Context { generation: 0, diversity: 0.5, stagnation: 0.0, state: &None::<()> })
                         .map(|genome| Individual::<()>::new(genome, Lineage::Mutant(0, g)))
                 })
                 .collect_vec();
@@ -196,16 +195,15 @@ mod tests {
     fn _tuning() {
         let ranges = &[(0, 100)];
         let std_dev = 0.5; // 5% // 1 - 10% // 2 - 20% // 5 - 50%;
-        let evo = DefaultEvolution::new(
+        let mutator = DefaultMutator::new(
             ranges,
-            &[1],
             DefaultEvolutionConfig { max_mutation_sigma: std_dev, min_mutation_sigma: std_dev, ..Default::default() },
         );
         let ctx = Context { generation: 0, diversity: 0.5, stagnation: 0.0, state: &None::<()> };
 
         let items = (0..100_000)
             .map(|g| {
-                let genome = evo.mutant(&[50], &ctx).unwrap();
+                let genome = mutator.mutant(&[50], &ctx).unwrap();
                 Individual::<()>::new(genome, Lineage::Mutant(0, g))
             })
             .collect_vec();
@@ -340,9 +338,9 @@ mod tests {
 
     fn test_remove_duplicates() {
         let ranges = &[(0, 1_000); 10];
-        let evo = DefaultEvolution::new(ranges, &[10], DefaultEvolutionConfig::default());
-        let i1 = Individual::firstborn(0, <DefaultEvolution as Evolver<()>>::generate(&evo));
-        let i2 = Individual::firstborn(0, <DefaultEvolution as Evolver<()>>::generate(&evo));
+        let generator = DefaultGenerator::new(ranges);
+        let i1 = Individual::firstborn(0, generator.generate());
+        let i2 = Individual::firstborn(0, generator.generate());
         let i3 = Individual::new(i2.genome.clone(), i2.lineage.clone());
 
         let mut pool = Pool::<()>::new(0, vec![i1, i2, i3]);
@@ -354,8 +352,8 @@ mod tests {
     #[test]
     fn test_deduplication_keeps_with_fitness() {
         let ranges = &[(0, 1_000); 10];
-        let evo = DefaultEvolution::new(ranges, &[10], DefaultEvolutionConfig::default());
-        let i1 = Individual::firstborn(0, <DefaultEvolution as Evolver<()>>::generate(&evo));
+        let generator = DefaultGenerator::new(ranges);
+        let i1 = Individual::firstborn(0, generator.generate());
         let mut i2 = Individual::<()>::new(i1.genome.clone(), i1.lineage.clone());
         i2.fitness = 1.0;
         let mut pool = Pool::new(0, vec![i1, i2]);

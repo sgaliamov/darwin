@@ -1,6 +1,6 @@
-/// Context passed to [`super::evolver::Evolver`] methods on each mutation / crossover call.
-/// Carries GA-level signals an evolver may use to tune its behaviour.
-/// All pressure values are normalised to `[0.0, 1.0]`.
+/// Context passed to [`super::evolver::Mutator`] and [`super::evolver::Crossover`] on each call.
+/// Carries GA-level signals an evolver may use to tune its behavior.
+/// All pressure values are normalized to `[0.0, 1.0]`.
 pub struct Context<'a, GaState> {
     /// Current generation number.
     pub generation: usize,

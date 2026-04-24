@@ -1,17 +1,19 @@
 ﻿use crate::{
-    CallbackFn, Config, Context, Evolver, GeneticAlgorithm, Individual, Lineage, Pool, Pools,
-    ScoreFn,
+    CallbackFn, Config, Context, Crossover, Generator, GeneticAlgorithm, Individual, Lineage, Mutator, Pool, Pools, ScoreFn
 };
 use itertools::Itertools;
 use rand::prelude::*;
 use rayon::prelude::*;
 
-impl<'a, GaState, IndState, E: Evolver<GaState>> GeneticAlgorithm<'a, GaState, IndState, E>
+impl<'a, GaState, IndState, G, M, C> GeneticAlgorithm<'a, GaState, IndState, G, M, C>
 where
     GaState: Sync,
     IndState: Send + Sync,
+    G: Generator,
+    M: Mutator<GaState>,
+    C: Crossover<GaState>,
 {
-    pub fn new(config: &'a Config, evolver: E) -> Self {
+    pub fn new(config: &'a Config, generator: G, mutator: M, crossover: C) -> Self {
         assert!(config.stagnation_count > 0, "stall_generations must be > 0");
         assert!((0.0..1.0).contains(&config.crossover_ratio));
         assert!(config.random_ratio >= 0.0, "random_ratio must be >= 0");
@@ -71,7 +73,9 @@ where
             best: None,
             config,
             pools,
-            evolver,
+            generator,
+            mutator,
+            crossover,
             crossover_size,
             stagnation_counter: 0,
             immigrant_count,
@@ -185,7 +189,7 @@ where
 
         // Borrow evolver and mutant_count before the parallel loop so that
         // par_iter_mut can take a mutable borrow of pools independently.
-        let evolver = &self.evolver;
+        let evolver = &self.mutator;
         let mutant_count = self.mutant_count;
         let state = &self.state;
 
@@ -229,7 +233,7 @@ where
         let Self {
             pools,
             crossover_size,
-            evolver,
+            crossover,
             mutant_count,
             state,
             config: Config {
@@ -241,8 +245,8 @@ where
         let crossover_size = *crossover_size;
         let tournament_size = *tournament_size;
         let mutant_count = *mutant_count;
-        // Coerce to shared ref so the closure is Sync (E: Evolver: Sync).
-        let evolver: &E = evolver;
+        // Coerce to shared ref so the closure is Sync.
+        let crossover: &C = crossover;
         let state: &Option<GaState> = state;
 
         let offspring: Vec<_> = pools
@@ -269,7 +273,7 @@ where
 
                         let (ga, gb) = (dad.lineage.generation(), mom.lineage.generation());
 
-                        for g in evolver.cross(
+                        for g in crossover.cross(
                             &dad.genome,
                             &mom.genome,
                             &Context {
@@ -315,7 +319,7 @@ where
             self.config.population_size
         };
 
-        let evolver = &self.evolver;
+        let evolver = &self.generator;
 
         self.pools.par_iter_mut().for_each(|pool| {
             let current = pool.individuals.len();
@@ -452,7 +456,7 @@ mod tests {
             ..Default::default()
         };
 
-        use crate::{DefaultEvolution, DefaultEvolutionConfig};
+        use crate::{DefaultEvolutionConfig, DefaultGenerator, DefaultMutator, DefaultCrossover};
         let ranges: Vec<_> = config.ranges.iter().flatten().cloned().collect();
         let groups: Vec<_> = config.ranges.iter().map(|g| g.len()).collect();
         let evo_config = DefaultEvolutionConfig {
@@ -460,8 +464,10 @@ mod tests {
             min_mutation_sigma: 0.5,
             max_generation: config.max_generation,
         };
-        let evolver = DefaultEvolution::new(&ranges, &groups, evo_config);
-        let mut ga = GeneticAlgorithm::<(), (), _>::new(&config, evolver);
+        let generator = DefaultGenerator::new(&ranges);
+        let mutator = DefaultMutator::new(&ranges, evo_config.clone());
+        let crossover = DefaultCrossover::new(&ranges, &groups, evo_config);
+        let mut ga = GeneticAlgorithm::<(), (), _, _, _>::new(&config, generator, mutator, crossover);
         ga.set_score_fn(|g, _| (-(g[0] as f64).powi(2), None));
 
         let start = std::time::Instant::now();
@@ -485,7 +491,7 @@ mod tests {
             ..Default::default()
         };
 
-        use crate::{DefaultEvolution, DefaultEvolutionConfig};
+        use crate::{DefaultEvolutionConfig, DefaultGenerator, DefaultMutator, DefaultCrossover};
         let ranges: Vec<_> = config.ranges.iter().flatten().cloned().collect();
         let groups: Vec<_> = config.ranges.iter().map(|g| g.len()).collect();
         let evo_config = DefaultEvolutionConfig {
@@ -493,8 +499,10 @@ mod tests {
             min_mutation_sigma: 0.5,
             max_generation: config.max_generation,
         };
-        let evolver = DefaultEvolution::new(&ranges, &groups, evo_config);
-        let mut ga = GeneticAlgorithm::<(), (), _>::new(&config, evolver);
+        let generator = DefaultGenerator::new(&ranges);
+        let mutator = DefaultMutator::new(&ranges, evo_config.clone());
+        let crossover = DefaultCrossover::new(&ranges, &groups, evo_config);
+        let mut ga = GeneticAlgorithm::<(), (), _, _, _>::new(&config, generator, mutator, crossover);
         ga.set_score_fn(|g, _| (-(g[0] as f64).powi(2), None));
 
         let pools = ga.run();
@@ -519,7 +527,7 @@ mod tests {
             ..Default::default()
         };
 
-        use crate::{DefaultEvolution, DefaultEvolutionConfig};
+        use crate::{DefaultEvolutionConfig, DefaultGenerator, DefaultMutator, DefaultCrossover};
         let ranges: Vec<_> = config.ranges.iter().flatten().cloned().collect();
         let groups: Vec<_> = config.ranges.iter().map(|g| g.len()).collect();
         let evo_config = DefaultEvolutionConfig {
@@ -527,8 +535,10 @@ mod tests {
             min_mutation_sigma: 1.0,
             max_generation: config.max_generation,
         };
-        let evolver = DefaultEvolution::new(&ranges, &groups, evo_config);
-        let mut ga = GeneticAlgorithm::<(), (), _>::new(&config, evolver);
+        let generator = DefaultGenerator::new(&ranges);
+        let mutator = DefaultMutator::new(&ranges, evo_config.clone());
+        let crossover = DefaultCrossover::new(&ranges, &groups, evo_config);
+        let mut ga = GeneticAlgorithm::<(), (), _, _, _>::new(&config, generator, mutator, crossover);
         ga.set_score_fn(sphere_no_state);
 
         let first_best = ga.run().top_individuals_mut(1).first().unwrap().fitness;
@@ -548,17 +558,18 @@ mod tests {
     }
 
     fn test_run(config: Config, writer: BufWriter<&mut Vec<u8>>) -> bool {
-        use crate::{DefaultEvolution, DefaultEvolutionConfig};
+        use crate::{DefaultEvolutionConfig, DefaultGenerator, DefaultMutator, DefaultCrossover};
         let ranges: Vec<_> = config.ranges.iter().flatten().cloned().collect();
         let groups: Vec<_> = config.ranges.iter().map(|g| g.len()).collect();
         let evo_config = DefaultEvolutionConfig {
             max_mutation_sigma: 2.0,
             min_mutation_sigma: 1.0,
-
             max_generation: config.max_generation,
         };
-        let evolver = DefaultEvolution::new(&ranges, &groups, evo_config);
-        let mut ga = GeneticAlgorithm::new(&config, evolver);
+        let generator = DefaultGenerator::new(&ranges);
+        let mutator = DefaultMutator::new(&ranges, evo_config.clone());
+        let crossover = DefaultCrossover::new(&ranges, &groups, evo_config);
+        let mut ga = GeneticAlgorithm::new(&config, generator, mutator, crossover);
         ga.set_score_fn(sphere);
         ga.set_callback_fn(callback_fn);
         ga.set_state((&config, writer));
