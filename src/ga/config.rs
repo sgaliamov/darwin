@@ -53,6 +53,7 @@ pub struct Config {
 }
 
 impl Config {
+    // todo: better name
     pub fn mutant_count(&self) -> usize {
         (self.population_size as f32 * self.mutation_ratio)
             .ceil()

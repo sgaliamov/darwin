@@ -15,6 +15,25 @@ pub use pool::*;
 pub use pools::*;
 pub use sigma::*;
 
+/// Generates random genomes; must be `Send + Sync` for Rayon sharing.
+pub trait Generator: Send + Sync {
+    /// Produce a fully random genome within declared ranges.
+    fn generate(&self) -> Genome;
+}
+
+/// Produces mutated copies of a genome; must be `Send + Sync` for Rayon sharing.
+pub trait Mutator<GaState>: Send + Sync {
+    /// Return a mutated copy of `genome`, or `None` if the result falls outside range.
+    fn mutant(&self, genome: GenomeRef, ctx: &Context<'_, GaState>) -> Option<Genome>;
+}
+
+/// Produces offspring from two parent genomes; must be `Send + Sync` for Rayon sharing.
+pub trait Crossover<GaState>: Send + Sync {
+    /// Cross `dad` and `mom`, returning one or more child genomes.
+    fn cross(&self, dad: GenomeRef, mom: GenomeRef, ctx: &Context<'_, GaState>) -> Vec<Genome>;
+}
+
+
 /// Static score calculation function.
 pub type ScoreFn<GaState, IndState> = fn(GenomeRef, &Option<GaState>) -> (f64, Option<IndState>);
 

@@ -8,24 +8,6 @@ pub use generator::*;
 pub use mutator::*;
 use rand_distr::{Distribution, Normal};
 
-/// Generates random genomes; must be `Send + Sync` for Rayon sharing.
-pub trait Generator: Send + Sync {
-    /// Produce a fully random genome within declared ranges.
-    fn generate(&self) -> Genome;
-}
-
-/// Produces mutated copies of a genome; must be `Send + Sync` for Rayon sharing.
-pub trait Mutator<GaState>: Send + Sync {
-    /// Return a mutated copy of `genome`, or `None` if the result falls outside range.
-    fn mutant(&self, genome: GenomeRef, ctx: &Context<'_, GaState>) -> Option<Genome>;
-}
-
-/// Produces offspring from two parent genomes; must be `Send + Sync` for Rayon sharing.
-pub trait Crossover<GaState>: Send + Sync {
-    /// Cross `dad` and `mom`, returning one or more child genomes.
-    fn cross(&self, dad: GenomeRef, mom: GenomeRef, ctx: &Context<'_, GaState>) -> Vec<Genome>;
-}
-
 /// Applies Gaussian noise to `genome`.
 /// Returns `None` if any mutated gene falls outside its declared range.
 fn mutant_with_noise<GaState>(

@@ -1,5 +1,4 @@
-use super::super::genome::{GeneRanges, GeneRangesRef, Genome};
-use super::Generator;
+use crate::{GeneRanges, GeneRangesRef, Generator, Genome};
 use rand::RngExt;
 
 /// Generates random genomes from declared ranges.
@@ -9,7 +8,9 @@ pub struct DefaultGenerator {
 
 impl DefaultGenerator {
     pub fn new(ranges: GeneRangesRef) -> Self {
-        Self { ranges: ranges.to_vec() }
+        Self {
+            ranges: ranges.to_vec(),
+        }
     }
 }
 
