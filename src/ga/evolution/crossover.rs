@@ -1,7 +1,4 @@
-use super::super::genome::{GeneRanges, GeneRangesRef, Genome, GenomeRef};
-use super::config::SigmaConfig;
-use super::context::Context;
-use super::Crossover;
+use crate::{Context, Crossover, GeneRanges, GeneRangesRef, Genome, GenomeRef, Sigma};
 use rand::RngExt;
 use std::iter;
 
@@ -9,13 +6,17 @@ use std::iter;
 pub struct DefaultCrossover {
     ranges: GeneRanges,
     groups: Vec<usize>,
-    config: SigmaConfig,
+    config: Sigma,
 }
 
 impl DefaultCrossover {
-    pub fn new(ranges: GeneRangesRef, groups: &[usize], config: SigmaConfig) -> Self {
+    pub fn new(ranges: GeneRangesRef, groups: &[usize], config: Sigma) -> Self {
         assert!(!groups.is_empty());
-        Self { ranges: ranges.to_vec(), groups: groups.to_vec(), config }
+        Self {
+            ranges: ranges.to_vec(),
+            groups: groups.to_vec(),
+            config,
+        }
     }
 }
 
@@ -42,28 +43,38 @@ impl<GaState: Sync> Crossover<GaState> for DefaultCrossover {
                 Some((start, *i))
             })
             .for_each(|(start, end)| {
-                let src = if rng.random_bool(0.5) { &dad[start..end] } else { &mom[start..end] };
+                let src = if rng.random_bool(0.5) {
+                    &dad[start..end]
+                } else {
+                    &mom[start..end]
+                };
                 child.extend_from_slice(src);
             });
 
-        super::mutant_with_noise(&self.ranges, &self.config, &child, ctx, ctx.noise_factor(), &mut rng)
-            .into_iter()
-            .chain(iter::once(child))
-            .collect()
+        super::mutant_with_noise(
+            &self.ranges,
+            &self.config,
+            &child,
+            ctx,
+            ctx.noise_factor(),
+            &mut rng,
+        )
+        .into_iter()
+        .chain(iter::once(child))
+        .collect()
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::Generator;
     use super::*;
-    use super::super::generator::DefaultGenerator;
+    use crate::{DefaultGenerator, Generator};
 
     #[test]
     fn cross_keeps_group_chunks_from_either_parent() {
         let groups = vec![2, 1];
         let ranges = vec![(0, 9), (10, 19), (20, 29)];
-        let config = SigmaConfig::default();
+        let config = Sigma::default();
         let generator = DefaultGenerator::new(&ranges);
         let crossover = DefaultCrossover::new(&ranges, &groups, config);
 
@@ -75,7 +86,13 @@ mod tests {
             &dad,
             &mom,
             // diversity=1.0, stagnation=0.0 → noise_factor=0.0 → no mutation; pure child is last
-            &Context { generation: 0, diversity: 1.0, stagnation: 0.0, config: &ga_cfg, state: &None::<()> },
+            &Context {
+                generation: 0,
+                diversity: 1.0,
+                stagnation: 0.0,
+                config: &ga_cfg,
+                state: &None::<()>,
+            },
         );
         let child = &children[children.len() - 1];
 

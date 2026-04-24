@@ -1,12 +1,8 @@
-mod config;
-mod context;
 mod crossover;
 mod generator;
 mod mutator;
 
-use crate::{Gene, GeneRangesRef, Genome, GenomeRef};
-pub use config::*;
-pub use context::*;
+use crate::{Context, Gene, GeneRangesRef, Genome, GenomeRef, Sigma};
 pub use crossover::*;
 pub use generator::*;
 pub use mutator::*;
@@ -34,15 +30,14 @@ pub trait Crossover<GaState>: Send + Sync {
 /// Returns `None` if any mutated gene falls outside its declared range.
 fn mutant_with_noise<GaState>(
     ranges: GeneRangesRef,
-    config: &SigmaConfig,
+    config: &Sigma,
     genome: GenomeRef,
     ctx: &Context<'_, GaState>,
     noise_factor: f32,
     rng: &mut impl rand::Rng,
 ) -> Option<Genome> {
     // μ = 0 so shifts are symmetric around the original value.
-    let normal =
-        Normal::new(0.0_f32, config.sigma(ctx)).expect("`sigma` should be valid.");
+    let normal = Normal::new(0.0_f32, config.get(ctx)).expect("`sigma` should be valid.");
     genome
         .iter()
         .enumerate()

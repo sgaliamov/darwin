@@ -134,7 +134,7 @@ impl<State> Pool<State> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Config, Context, SigmaConfig, DefaultGenerator, DefaultMutator, Generator, Lineage, Mutator, Pool};
+    use crate::{Config, Context, Sigma, DefaultGenerator, DefaultMutator, Generator, Lineage, Mutator, Pool};
     use itertools::Itertools;
     use rand::{RngExt, SeedableRng, rngs::StdRng};
     use spectral::prelude::*;
@@ -174,7 +174,7 @@ mod tests {
                 .filter_map(|g| {
                     let mutator = DefaultMutator::new(
                         ranges,
-                        SigmaConfig { max: sigma, min: sigma },
+                        Sigma { max: sigma, min: sigma },
                     );
                     let ga_config = Config::default();
                     mutator.mutant(&[500], &Context { generation: 0, diversity: 0.5, stagnation: 0.0, config: &ga_config, state: &None::<()> })
@@ -198,7 +198,7 @@ mod tests {
         let std_dev = 0.5; // 5% // 1 - 10% // 2 - 20% // 5 - 50%;
         let mutator = DefaultMutator::new(
             ranges,
-            SigmaConfig { max: std_dev, min: std_dev },
+            Sigma { max: std_dev, min: std_dev },
         );
         let ga_cfg = Config::default();
         let ctx = Context { generation: 0, diversity: 0.5, stagnation: 0.0, config: &ga_cfg, state: &None::<()> };

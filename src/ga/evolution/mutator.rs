@@ -1,17 +1,17 @@
-use super::super::genome::{GeneRanges, GeneRangesRef, Genome, GenomeRef};
-use super::config::SigmaConfig;
-use super::context::Context;
-use super::Mutator;
+use crate::{Context, GeneRanges, GeneRangesRef, Genome, GenomeRef, Mutator, Sigma};
 
 /// Produces mutated genome copies via Gaussian noise.
 pub struct DefaultMutator {
     ranges: GeneRanges,
-    config: SigmaConfig,
+    config: Sigma,
 }
 
 impl DefaultMutator {
-    pub fn new(ranges: GeneRangesRef, config: SigmaConfig) -> Self {
-        Self { ranges: ranges.to_vec(), config }
+    pub fn new(ranges: GeneRangesRef, config: Sigma) -> Self {
+        Self {
+            ranges: ranges.to_vec(),
+            config,
+        }
     }
 }
 
@@ -33,17 +33,23 @@ impl<GaState: Sync> Mutator<GaState> for DefaultMutator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Config, Context, SigmaConfig};
+    use crate::{Config, Context, Sigma};
     use spectral::prelude::*;
 
     /// `mutant` with low sigma and high diversity (noise≈0) almost always returns the same genome.
     #[test]
     fn mutant_with_zero_noise_returns_same_genome() {
-        let mutator = DefaultMutator::new(&[(0, 1_000_000)], SigmaConfig::default());
+        let mutator = DefaultMutator::new(&[(0, 1_000_000)], Sigma::default());
         let genome = vec![500_000i64];
         // diversity=1, stagnation=0 → noise_factor=0 → shift is ~0 almost always
         let ga_cfg = Config::default();
-        let ctx = Context { generation: 0, diversity: 1.0, stagnation: 0.0, config: &ga_cfg, state: &None::<()> };
+        let ctx = Context {
+            generation: 0,
+            diversity: 1.0,
+            stagnation: 0.0,
+            config: &ga_cfg,
+            state: &None::<()>,
+        };
         let mut same = 0usize;
         for _ in 0..100 {
             if let Some(m) = mutator.mutant(&genome, &ctx) {
@@ -60,14 +66,23 @@ mod tests {
     fn mutant_never_exceeds_range() {
         let mutator = DefaultMutator::new(
             &[(0, 10)],
-            SigmaConfig {
+            Sigma {
                 max: 1000.0,
                 min: 500.0,
             },
         );
         let genome = vec![5i64];
-        let ga_cfg = Config { max_generation: 100, ..Config::default() };
-        let ctx = Context { generation: 0, diversity: 0.0, stagnation: 0.0, config: &ga_cfg, state: &None::<()> };
+        let ga_cfg = Config {
+            max_generation: 100,
+            ..Config::default()
+        };
+        let ctx = Context {
+            generation: 0,
+            diversity: 0.0,
+            stagnation: 0.0,
+            config: &ga_cfg,
+            state: &None::<()>,
+        };
         // mutants that land outside the range return None — verify any Some is in range
         for _ in 0..200 {
             if let Some(m) = mutator.mutant(&genome, &ctx) {

@@ -457,10 +457,10 @@ mod tests {
             ..Default::default()
         };
 
-        use crate::{SigmaConfig, DefaultGenerator, DefaultMutator, DefaultCrossover};
+        use crate::{Sigma, DefaultGenerator, DefaultMutator, DefaultCrossover};
         let ranges: Vec<_> = config.ranges.iter().flatten().cloned().collect();
         let groups: Vec<_> = config.ranges.iter().map(|g| g.len()).collect();
-        let evo_config = SigmaConfig {
+        let evo_config = Sigma {
             max: 1.0,
             min: 0.5,
         };
@@ -491,10 +491,10 @@ mod tests {
             ..Default::default()
         };
 
-        use crate::{SigmaConfig, DefaultGenerator, DefaultMutator, DefaultCrossover};
+        use crate::{Sigma, DefaultGenerator, DefaultMutator, DefaultCrossover};
         let ranges: Vec<_> = config.ranges.iter().flatten().cloned().collect();
         let groups: Vec<_> = config.ranges.iter().map(|g| g.len()).collect();
-        let evo_config = SigmaConfig {
+        let evo_config = Sigma {
             max: 5.0,
             min: 0.5,
         };
@@ -526,10 +526,10 @@ mod tests {
             ..Default::default()
         };
 
-        use crate::{SigmaConfig, DefaultGenerator, DefaultMutator, DefaultCrossover};
+        use crate::{Sigma, DefaultGenerator, DefaultMutator, DefaultCrossover};
         let ranges: Vec<_> = config.ranges.iter().flatten().cloned().collect();
         let groups: Vec<_> = config.ranges.iter().map(|g| g.len()).collect();
-        let evo_config = SigmaConfig {
+        let evo_config = Sigma {
             max: 2.0,
             min: 1.0,
         };
@@ -556,10 +556,10 @@ mod tests {
     }
 
     fn test_run(config: Config, writer: BufWriter<&mut Vec<u8>>) -> bool {
-        use crate::{SigmaConfig, DefaultGenerator, DefaultMutator, DefaultCrossover};
+        use crate::{Sigma, DefaultGenerator, DefaultMutator, DefaultCrossover};
         let ranges: Vec<_> = config.ranges.iter().flatten().cloned().collect();
         let groups: Vec<_> = config.ranges.iter().map(|g| g.len()).collect();
-        let evo_config = SigmaConfig {
+        let evo_config = Sigma {
             max: 2.0,
             min: 1.0,
         };

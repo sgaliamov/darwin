@@ -1,6 +1,7 @@
 /// Context passed to [`super::evolver::Mutator`] and [`super::evolver::Crossover`] on each call.
 /// Carries GA-level signals an evolver may use to tune its behavior.
 /// All pressure values are normalized to `[0.0, 1.0]`.
+#[derive(Debug)]
 pub struct Context<'a, GaState> {
     /// Current generation number.
     pub generation: usize,
@@ -23,18 +24,6 @@ impl<GaState> Copy for Context<'_, GaState> {}
 impl<GaState> Clone for Context<'_, GaState> {
     fn clone(&self) -> Self {
         *self
-    }
-}
-
-impl<GaState: std::fmt::Debug> std::fmt::Debug for Context<'_, GaState> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Context")
-            .field("generation", &self.generation)
-            .field("diversity", &self.diversity)
-            .field("stagnation", &self.stagnation)
-            .field("config", &self.config)
-            .field("state", &self.state)
-            .finish()
     }
 }
 

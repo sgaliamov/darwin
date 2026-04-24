@@ -1,15 +1,19 @@
 mod config;
+mod context;
 mod evolution;
 mod genome;
 mod methods;
 mod pool;
 mod pools;
+mod sigma;
 
 pub use config::*;
+pub use context::*;
 pub use evolution::*;
 pub use genome::*;
 pub use pool::*;
 pub use pools::*;
+pub use sigma::*;
 
 /// Static score calculation function.
 pub type ScoreFn<GaState, IndState> = fn(GenomeRef, &Option<GaState>) -> (f64, Option<IndState>);
