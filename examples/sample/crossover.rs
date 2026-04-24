@@ -23,7 +23,7 @@ impl<G: Gene + Add<Output = G> + TryFrom<i64>> DefaultCrossover<G> {
     }
 }
 
-impl<G, GaState> Crossover<G, GaState> for DefaultCrossover<G>
+impl<G, GaState, IndState> Crossover<G, GaState, IndState> for DefaultCrossover<G>
 where
     G: Gene + Add<Output = G> + TryFrom<i64>,
     GaState: Sync,
@@ -35,7 +35,7 @@ where
         &self,
         dad: GenomeRef<G>,
         mom: GenomeRef<G>,
-        ctx: &Context<'_, G, GaState>,
+        ctx: &Context<'_, G, GaState, IndState>,
     ) -> Vec<Genome<G>> {
         debug_assert_eq!(dad.len(), mom.len(), "parents must be same length");
         debug_assert_eq!(
@@ -87,21 +87,23 @@ mod tests {
         let generator = DefaultGenerator::new(&ranges);
         let crossover = DefaultCrossover::new(&range_set, config);
 
-        let mom = generator.generate();
-        let dad = generator.generate();
-
         let ga_cfg = Config::default();
+        let ctx = Context::<i64, (), ()> {
+            generation: 0,
+            diversity: 1.0,
+            stagnation: 0.0,
+            config: &ga_cfg,
+            state: &None::<()>,
+            best: &None,
+        };
+        let mom = generator.generate(&ctx);
+        let dad = generator.generate(&ctx);
+
         let children = crossover.cross(
             &dad,
             &mom,
             // diversity=1.0, stagnation=0.0 → noise_factor=0.0 → no mutation; pure child is last
-            &Context {
-                generation: 0,
-                diversity: 1.0,
-                stagnation: 0.0,
-                config: &ga_cfg,
-                state: &None::<()>,
-            },
+            &ctx,
         );
         let child = &children[children.len() - 1];
 

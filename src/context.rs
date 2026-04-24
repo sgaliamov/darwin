@@ -1,10 +1,11 @@
-use crate::Gene;
+use crate::{Gene, Genome};
+use std::marker::PhantomData;
 
-/// Context passed to [`super::Mutator`] and [`super::Crossover`] on each call.
-/// Carries GA-level signals an evolver may use to tune its behavior.
+/// Context passed to all GA operators on each call.
+/// Carries GA-level signals an operator may use to tune its behavior.
 /// All pressure values are normalized to `[0.0, 1.0]`.
 #[derive(Debug)]
-pub struct Context<'a, G: Gene, GaState> {
+pub struct Context<'a, G: Gene, GaState, IndState> {
     /// Current generation number.
     pub generation: usize,
 
@@ -14,16 +15,21 @@ pub struct Context<'a, G: Gene, GaState> {
     /// Stagnation pressure: `0.0` = still improving, `1.0` = fully stagnated.
     pub stagnation: f32,
 
-    /// GA configuration; gives evolvers access to e.g. `max_generation`.
+    /// GA configuration; gives operators access to e.g. `max_generation`.
     pub config: &'a crate::Config<G>,
 
-    /// External GA state shared with the score / callback functions.
+    /// External GA state shared with all operators.
     pub state: &'a Option<GaState>,
+
+    /// Global best genome and fitness seen so far.
+    pub best: &'a Option<(Genome<G>, f64)>,
+
+    pub __: PhantomData<IndState>,
 }
 
-impl<G: Gene, GaState> Copy for Context<'_, G, GaState> {}
+impl<G: Gene, GaState, IndState> Copy for Context<'_, G, GaState, IndState> {}
 
-impl<G: Gene, GaState> Clone for Context<'_, G, GaState> {
+impl<G: Gene, GaState, IndState> Clone for Context<'_, G, GaState, IndState> {
     fn clone(&self) -> Self {
         *self
     }

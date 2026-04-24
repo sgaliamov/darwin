@@ -17,43 +17,98 @@ pub use sigma::*;
 pub use individual::*;
 
 /// Generates random genomes; must be `Send + Sync` for Rayon sharing.
-pub trait Generator<G: Gene>: Send + Sync {
+pub trait Generator<G: Gene, GaState, IndState>: Send + Sync {
     /// Produce a fully random genome within declared ranges.
-    fn generate(&self) -> Genome<G>;
+    fn generate(&self, ctx: &Context<'_, G, GaState, IndState>) -> Genome<G>;
 }
 
 /// Produces mutated copies of a genome; must be `Send + Sync` for Rayon sharing.
-pub trait Mutator<G: Gene, GaState>: Send + Sync {
+pub trait Mutator<G: Gene, GaState, IndState>: Send + Sync {
     /// Return a mutated copy of `genome`, or `None` if the result falls outside range.
-    fn mutant(&self, genome: GenomeRef<G>, ctx: &Context<'_, G, GaState>) -> Option<Genome<G>>;
+    fn mutant(&self, genome: GenomeRef<G>, ctx: &Context<'_, G, GaState, IndState>) -> Option<Genome<G>>;
 }
 
 /// Produces offspring from two parent genomes; must be `Send + Sync` for Rayon sharing.
-pub trait Crossover<G: Gene, GaState>: Send + Sync {
+pub trait Crossover<G: Gene, GaState, IndState>: Send + Sync {
     /// Cross `dad` and `mom`, returning one or more child genomes.
     fn cross(
         &self,
         dad: GenomeRef<G>,
         mom: GenomeRef<G>,
-        ctx: &Context<'_, G, GaState>,
+        ctx: &Context<'_, G, GaState, IndState>,
     ) -> Vec<Genome<G>>;
 }
 
-/// Static score calculation function.
-pub type ScoreFn<G, GaState, IndState> =
-    fn(GenomeRef<G>, &Option<GaState>) -> (f64, Option<IndState>);
+/// Computes fitness for a genome; must be `Send + Sync` for Rayon sharing.
+pub trait Scorer<G: Gene, GaState, IndState>: Send + Sync {
+    /// Return `(fitness, individual_state)` for `genome`.
+    fn score(&self, genome: GenomeRef<G>, ctx: &Context<'_, G, GaState, IndState>) -> (f64, Option<IndState>);
+}
 
-/// Static callback.
-pub type CallbackFn<G, GaState, IndState> =
-    fn(usize, &Option<(Genome<G>, f64)>, &Pools<G, IndState>, &mut Option<GaState>);
+/// Reports progress after each generation; must be `Send + Sync` for Rayon sharing.
+pub trait Callback<G: Gene, GaState, IndState>: Send + Sync {
+    /// Called once per generation with context and all pools.
+    fn call(
+        &self,
+        ctx: &Context<'_, G, GaState, IndState>,
+        pools: &Pools<G, IndState>,
+    );
+}
 
-/// Evolution engine with independently injectable genome operations.
-pub struct GeneticAlgorithm<'a, G, GaState, IndState, Gen, M, C>
+impl<G, GaState, IndState, F> Scorer<G, GaState, IndState> for F
 where
     G: Gene,
-    Gen: Generator<G>,
-    M: Mutator<G, GaState>,
-    C: Crossover<G, GaState>,
+    F: Fn(GenomeRef<G>, &Context<'_, G, GaState, IndState>) -> (f64, Option<IndState>) + Send + Sync,
+{
+    fn score(&self, genome: GenomeRef<G>, ctx: &Context<'_, G, GaState, IndState>) -> (f64, Option<IndState>) {
+        self(genome, ctx)
+    }
+}
+
+impl<G, GaState, IndState, F> Callback<G, GaState, IndState> for F
+where
+    G: Gene,
+    F: Fn(&Context<'_, G, GaState, IndState>, &Pools<G, IndState>) + Send + Sync,
+{
+    fn call(
+        &self,
+        ctx: &Context<'_, G, GaState, IndState>,
+        pools: &Pools<G, IndState>,
+    ) {
+        self(ctx, pools)
+    }
+}
+
+/// No-op scorer; returns `f64::NAN` for all genomes.
+pub struct NoopScorer;
+
+impl<G: Gene, GaState, IndState> Scorer<G, GaState, IndState> for NoopScorer {
+    fn score(&self, _: GenomeRef<G>, _: &Context<'_, G, GaState, IndState>) -> (f64, Option<IndState>) {
+        (f64::NAN, None)
+    }
+}
+
+/// No-op callback; discards all arguments.
+pub struct NoopCallback;
+
+impl<G: Gene, GaState, IndState> Callback<G, GaState, IndState> for NoopCallback {
+    fn call(
+        &self,
+        _: &Context<'_, G, GaState, IndState>,
+        _: &Pools<G, IndState>,
+    ) {
+    }
+}
+
+/// Evolution engine with independently injectable genome operations.
+pub struct GeneticAlgorithm<'a, G, GaState, IndState, Gen, M, C, Sc, Cb>
+where
+    G: Gene,
+    Gen: Generator<G, GaState, IndState>,
+    M: Mutator<G, GaState, IndState>,
+    C: Crossover<G, GaState, IndState>,
+    Sc: Scorer<G, GaState, IndState>,
+    Cb: Callback<G, GaState, IndState>,
 {
     /// GA configuration.
     config: &'a Config<G>,
@@ -73,10 +128,10 @@ where
     state: Option<GaState>,
 
     /// Fitness function.
-    score_fn: ScoreFn<G, GaState, IndState>,
+    scorer: Sc,
 
     /// Callback to report progress outside each generation.
-    callback_fn: CallbackFn<G, GaState, IndState>,
+    callback: Cb,
 
     /// Random genome generator.
     generator: Gen,

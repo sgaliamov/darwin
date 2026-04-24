@@ -5,16 +5,17 @@ fn main() {}
 #[cfg(test)]
 mod tests {
     use super::sample;
-    use darwin::{Config, GeneticAlgorithm, GenomeRef, Pools, Sigma};
+    use darwin::{Config, Context, GeneticAlgorithm, GenomeRef, NoopCallback, Pools, Sigma};
     use sample::{DefaultCrossover, DefaultGenerator, DefaultMutator};
     use itertools::Itertools;
     use spectral::prelude::*;
+    use std::cell::RefCell;
     use std::io::{BufWriter, Write};
 
-    type State<'a> = (&'a Config<i64>, BufWriter<&'a mut Vec<u8>>);
+    type State<'a> = (&'a Config<i64>, RefCell<BufWriter<&'a mut Vec<u8>>>);
 
     /// Fitness = ∑x² → 0 at the origin.
-    fn sphere(genome: GenomeRef<i64>, _state: &Option<State>) -> (f64, Option<()>) {
+    fn sphere(genome: GenomeRef<i64>, _ctx: &Context<'_, i64, State, ()>) -> (f64, Option<()>) {
         let score = -genome
             .iter()
             .map(|&x| x as f64 / 99.0)
@@ -24,12 +25,12 @@ mod tests {
     }
 
     fn callback_fn(
-        g: usize,
-        _: &Option<(darwin::Genome<i64>, f64)>,
+        ctx: &Context<'_, i64, State<'_>, ()>,
         pools: &Pools<i64, ()>,
-        state: &mut Option<State>,
     ) {
-        let (config, writer) = state.as_mut().unwrap();
+        let (config, writer) = ctx.state.as_ref().unwrap();
+        let mut writer = writer.borrow_mut();
+        let g = ctx.generation;
 
         for pool in pools.iter() {
             let line = format!(
@@ -111,8 +112,11 @@ mod tests {
         let generator = DefaultGenerator::new(&ranges);
         let mutator = DefaultMutator::new(&ranges, evo_config.clone());
         let crossover = DefaultCrossover::new(&ranges, &groups, evo_config);
-        let mut ga = GeneticAlgorithm::<i64, (), (), _, _, _>::new(&config, generator, mutator, crossover);
-        ga.set_score_fn(|g, _| (-(g[0] as f64).powi(2), None));
+        let mut ga = GeneticAlgorithm::<i64, (), (), _, _, _, _, _>::new(
+            &config, generator, mutator, crossover,
+            |g: GenomeRef<i64>, _: &Context<'_, i64, (), ()>| (-(g[0] as f64).powi(2), None),
+            NoopCallback,
+        );
 
         let start = std::time::Instant::now();
         ga.run();
@@ -135,12 +139,12 @@ mod tests {
 
         let ranges: Vec<_> = config.ranges.iter().flatten().cloned().collect();
         let groups: Vec<_> = config.ranges.iter().map(|g| g.len()).collect();
-        let evo_config = Sigma { max: 5.0, min: 0.5 };
-        let generator = DefaultGenerator::new(&ranges);
-        let mutator = DefaultMutator::new(&ranges, evo_config.clone());
         let crossover = DefaultCrossover::new(&ranges, &groups, evo_config);
-        let mut ga = GeneticAlgorithm::<i64, (), (), _, _, _>::new(&config, generator, mutator, crossover);
-        ga.set_score_fn(|g, _| (-(g[0] as f64).powi(2), None));
+        let mut ga = GeneticAlgorithm::<i64, (), (), _, _, _, _, _>::new(
+            &config, generator, mutator, crossover,
+            |g: GenomeRef<i64>, _: &Context<'_, i64, (), ()>| (-(g[0] as f64).powi(2), None),
+            NoopCallback,
+        );
 
         let best = ga.run().top_individuals_mut(1).first().unwrap().genome[0];
         // optimum is 0; accept a small tolerance
@@ -165,8 +169,9 @@ mod tests {
         let generator = DefaultGenerator::new(&ranges);
         let mutator = DefaultMutator::new(&ranges, evo_config.clone());
         let crossover = DefaultCrossover::new(&ranges, &groups, evo_config);
-        let mut ga = GeneticAlgorithm::<i64, (), (), _, _, _>::new(&config, generator, mutator, crossover);
-        ga.set_score_fn(sphere_no_state);
+        let mut ga = GeneticAlgorithm::<i64, (), (), _, _, _, _, _>::new(
+            &config, generator, mutator, crossover, sphere_no_state, NoopCallback,
+        );
 
         let first_best = ga.run().top_individuals_mut(1).first().unwrap().fitness;
         let second_best = ga.run().top_individuals_mut(1).first().unwrap().fitness;
@@ -197,7 +202,7 @@ mod tests {
         }
     }
 
-    fn sphere_no_state(genome: GenomeRef<i64>, _: &Option<()>) -> (f64, Option<()>) {
+    fn sphere_no_state(genome: GenomeRef<i64>, _: &Context<'_, i64, (), ()>) -> (f64, Option<()>) {
         let score = -genome
             .iter()
             .map(|&x| x as f64 / 99.0)
@@ -213,10 +218,8 @@ mod tests {
         let generator = DefaultGenerator::new(&ranges);
         let mutator = DefaultMutator::new(&ranges, evo_config.clone());
         let crossover = DefaultCrossover::new(&ranges, &groups, evo_config);
-        let mut ga = GeneticAlgorithm::new(&config, generator, mutator, crossover);
-        ga.set_score_fn(sphere);
-        ga.set_callback_fn(callback_fn);
-        ga.set_state((&config, writer));
+        let mut ga = GeneticAlgorithm::new(&config, generator, mutator, crossover, sphere, callback_fn);
+        ga.set_state((&config, RefCell::new(writer)));
         let pools = ga.run();
         pools
             .top_individuals_mut(config.bests)

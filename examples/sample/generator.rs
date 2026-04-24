@@ -1,4 +1,4 @@
-use darwin::{Gene, GeneRanges, GeneRangesRef, Generator, Genome};
+use darwin::{Context, Gene, GeneRanges, GeneRangesRef, Generator, Genome};
 use rand::RngExt;
 use rand::distr::uniform::SampleUniform;
 
@@ -15,9 +15,9 @@ impl<G: Gene + SampleUniform> DefaultGenerator<G> {
     }
 }
 
-impl<G: Gene + SampleUniform> Generator<G> for DefaultGenerator<G> {
+impl<G: Gene + SampleUniform, GaState, IndState> Generator<G, GaState, IndState> for DefaultGenerator<G> {
     /// Produce a random genome; each gene is drawn uniformly from its range.
-    fn generate(&self) -> Genome<G> {
+    fn generate(&self, _ctx: &Context<'_, G, GaState, IndState>) -> Genome<G> {
         let mut rng = rand::rng();
         self.ranges
             .iter()
@@ -39,10 +39,16 @@ mod tests {
     /// Every gene of `generate()` must stay within its declared range.
     #[test]
     fn random_genome_stays_in_range() {
+        use darwin::{Config, Context};
         let ranges: Vec<(i64, i64)> = vec![(0, 9), (10, 19), (100, 200)];
         let generator = DefaultGenerator::new(&ranges);
+        let cfg = Config::<i64>::default();
+        let ctx = Context::<i64, (), ()> {
+            generation: 0, diversity: 0.0, stagnation: 0.0,
+            config: &cfg, state: &None, best: &None,
+        };
         for _ in 0..100 {
-            let g = generator.generate();
+            let g = generator.generate(&ctx);
             for (gene, &(lo, hi)) in g.iter().zip(ranges.iter()) {
                 assert!(*gene >= lo && *gene <= hi, "gene {gene} out of [{lo},{hi}]");
             }

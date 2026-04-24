@@ -1,21 +1,31 @@
 ﻿use crate::{
-    CallbackFn, Config, Context, Crossover, Gene, Generator, GeneticAlgorithm, Individual, Lineage,
-    Mutator, Pool, Pools, ScoreFn,
+    Callback, Config, Context, Crossover, Gene, Generator, GeneticAlgorithm, Individual, Lineage,
+    Mutator, Pool, Pools, Scorer,
 };
 use itertools::Itertools;
 use rand::prelude::*;
 use rayon::prelude::*;
 
-impl<'a, G, GaState, IndState, Gen, M, C> GeneticAlgorithm<'a, G, GaState, IndState, Gen, M, C>
+impl<'a, G, GaState, IndState, Gen, M, C, Sc, Cb>
+    GeneticAlgorithm<'a, G, GaState, IndState, Gen, M, C, Sc, Cb>
 where
     G: Gene,
     GaState: Sync,
     IndState: Send + Sync,
-    Gen: Generator<G>,
-    M: Mutator<G, GaState>,
-    C: Crossover<G, GaState>,
+    Gen: Generator<G, GaState, IndState>,
+    M: Mutator<G, GaState, IndState>,
+    C: Crossover<G, GaState, IndState>,
+    Sc: Scorer<G, GaState, IndState>,
+    Cb: Callback<G, GaState, IndState>,
 {
-    pub fn new(config: &'a Config<G>, generator: Gen, mutator: M, crossover: C) -> Self {
+    pub fn new(
+        config: &'a Config<G>,
+        generator: Gen,
+        mutator: M,
+        crossover: C,
+        scorer: Sc,
+        callback: Cb,
+    ) -> Self {
         assert!(config.stagnation_count > 0, "stall_generations must be > 0");
         assert!((0.0..1.0).contains(&config.crossover_ratio));
         assert!(config.random_ratio >= 0.0, "random_ratio must be >= 0");
@@ -41,15 +51,15 @@ where
             .ceil()
             .max(1.0) as usize;
 
-        let ranges = config.ranges.iter().flatten().cloned().collect_vec();
+        let flat_genome = config.ranges.iter().flatten().cloned().collect_vec();
 
         // Each seed genome goes to a pool in round-robin fashion.
         if !config.seed.is_empty() {
             for (i, genome) in config.seed.iter().cloned().enumerate() {
                 assert!(
-                    genome.len() == ranges.len(),
+                    genome.len() == flat_genome.len(),
                     "seed genome length mismatch: expected {}, got {}",
-                    ranges.len(),
+                    flat_genome.len(),
                     genome.len()
                 );
                 let pool_idx = i % pools.len();
@@ -63,14 +73,14 @@ where
                 .iter_mut()
                 .filter(|p| !p.individuals.is_empty())
                 .for_each(|p| {
-                    p.calc_diversity(&ranges);
+                    p.calc_diversity(&flat_genome);
                 });
         }
 
         Self {
-            flat_genome: ranges,
-            score_fn: |_, _| (f64::NAN, None),
-            callback_fn: |_, _, _, _| {},
+            flat_genome,
+            scorer,
+            callback,
             state: None,
             best: None,
             config,
@@ -85,15 +95,7 @@ where
         }
     }
 
-    pub fn set_score_fn(&mut self, score_fn: ScoreFn<G, GaState, IndState>) {
-        self.score_fn = score_fn;
-    }
-
-    pub fn set_callback_fn(&mut self, callback_fn: CallbackFn<G, GaState, IndState>) {
-        self.callback_fn = callback_fn;
-    }
-
-    /// Optional external state can be set for use in `score_fn` and `callback_fn`.
+    /// Optional external state can be set for use in `scorer` and `callback`.
     pub fn set_state(&mut self, state: GaState) {
         self.state = Some(state);
     }
@@ -109,9 +111,22 @@ where
             self.mutate(generation);
             self.recombine(generation);
             self.random(generation);
-            self.evaluate_generation();
+            self.evaluate_generation(generation);
             let new_champ = self.update_champ();
-            (self.callback_fn)(generation, &self.best, &self.pools, &mut self.state);
+
+            let stagnation_ratio =
+                (self.stagnation_counter as f32 / self.config.stagnation_count as f32).min(1.0);
+
+            let ctx = Context::<G, GaState, IndState> {
+                generation,
+                diversity: f32::NAN, // todo: wtf?
+                stagnation: stagnation_ratio,
+                config: self.config,
+                state: &self.state,
+                best: &self.best,
+                __: std::marker::PhantomData,
+            };
+            self.callback.call(&ctx, &self.pools);
 
             if self.stagnation(new_champ) {
                 break;
@@ -136,23 +151,41 @@ where
     /// Evaluate all individuals (parallel) and sort each pool descending by
     /// fitness. Truncate back to `population_size` in case parents + offspring
     /// exceeded the limit.
-    fn evaluate_generation(&mut self) {
+    fn evaluate_generation(&mut self, generation: usize) {
+        let best = &self.best;
+        let config = self.config;
+        let state = &self.state;
+        let scorer = &self.scorer;
+        let flat_genome = &self.flat_genome;
+        let population_size = config.population_size;
+        let stagnation = (self.stagnation_counter as f32 / config.stagnation_count as f32).min(1.0);
+
         self.pools.par_iter_mut().for_each(|pool| {
             pool.dedup();
 
+            let ctx = Context::<G, GaState, IndState> {
+                generation,
+                diversity: pool.diversity(), // todo: pass the pool?
+                stagnation,
+                config,
+                state,
+                best,
+                __: std::marker::PhantomData,
+            };
+
             pool.individuals
                 .par_iter_mut()
-                .for_each(|ind| ind.evaluate(&self.score_fn, &self.state));
+                .for_each(|ind| ind.evaluate(scorer, &ctx));
 
             pool.individuals.retain(|ind| ind.fitness.is_finite());
 
             pool.individuals
                 .sort_unstable_by(|a, b| b.fitness.total_cmp(&a.fitness));
 
-            pool.individuals.truncate(self.config.population_size);
+            pool.individuals.truncate(population_size);
 
             // diversity need to be updated before callback to provide actual state.
-            pool.calc_diversity(&self.flat_genome);
+            pool.calc_diversity(flat_genome);
         });
     }
 
@@ -195,6 +228,7 @@ where
         let mutant_count = self.mutant_count;
         let config = self.config;
         let state = &self.state;
+        let best = &self.best;
 
         self.pools.par_iter_mut().for_each(|pool| {
             if pool.individuals.is_empty() {
@@ -203,25 +237,28 @@ where
 
             let m = mutant_count.min(pool.individuals.len());
 
-            let ctx = Context {
-                generation,
-                diversity: pool.diversity(),
-                stagnation: stagnation_boost,
-                config,
-                state,
+            let mutants = {
+                let ctx = Context::<G, GaState, IndState> {
+                    generation,
+                    diversity: pool.diversity(),
+                    stagnation: stagnation_boost,
+                    config,
+                    state,
+                    best,
+                    __: std::marker::PhantomData,
+                };
+                pool.individuals[..m]
+                    .iter()
+                    .filter_map(|parent| {
+                        evolver
+                            .mutant(&parent.genome, &ctx)
+                            .map(|genome| (genome, parent.lineage.generation()))
+                    })
+                    .map(|(genome, parent)| {
+                        Individual::new(genome, Lineage::Mutant(generation, parent))
+                    })
+                    .collect_vec()
             };
-
-            let mutants = pool.individuals[..m]
-                .iter()
-                .filter_map(|parent| {
-                    evolver
-                        .mutant(&parent.genome, &ctx)
-                        .map(|genome| (genome, parent.lineage.generation()))
-                })
-                .map(|(genome, parent)| {
-                    Individual::new(genome, Lineage::Mutant(generation, parent))
-                })
-                .collect_vec();
 
             pool.individuals.extend(mutants);
         });
@@ -241,6 +278,7 @@ where
             mutant_count,
             state,
             config,
+            best,
             ..
         } = self;
 
@@ -278,12 +316,14 @@ where
                         for g in crossover.cross(
                             &dad.genome,
                             &mom.genome,
-                            &Context {
+                            &Context::<G, GaState, IndState> {
                                 generation,
                                 diversity,
                                 stagnation: stagnation_boost,
                                 config,
                                 state,
+                                best,
+                                __: std::marker::PhantomData,
                             },
                         ) {
                             kids.push(Individual::new(g, Lineage::Child(generation, ga, gb)));
@@ -323,19 +363,32 @@ where
         };
 
         let evolver = &self.generator;
+        let config = self.config;
+        let state = &self.state;
+        let best = &self.best;
+        let stagnation = (self.stagnation_counter as f32 / config.stagnation_count as f32).min(1.0);
 
         self.pools.par_iter_mut().for_each(|pool| {
-            let current = pool.individuals.len();
-            let deficit = target.saturating_sub(current);
+            let current_cnt = pool.individuals.len();
+            let deficit = target.saturating_sub(current_cnt);
             let count = quota.max(deficit);
+            let ctx = Context::<G, GaState, IndState> {
+                generation,
+                diversity: pool.diversity(),
+                stagnation,
+                config,
+                state,
+                best,
+                __: std::marker::PhantomData,
+            };
 
-            pool.individuals.extend(
-                std::iter::repeat_with(|| {
-                    let genome = evolver.generate();
-                    Individual::firstborn(generation, genome)
-                })
-                .take(count),
-            );
+            let new_individuals = std::iter::repeat_with(|| {
+                Individual::firstborn(generation, evolver.generate(&ctx))
+            })
+            .take(count)
+            .collect::<Vec<_>>();
+
+            pool.individuals.extend(new_individuals);
         });
     }
 

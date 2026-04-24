@@ -18,14 +18,14 @@ impl<G: Gene + SampleUniform + Add<Output = G> + TryFrom<i64>> DefaultMutator<G>
     }
 }
 
-impl<G, GaState> Mutator<G, GaState> for DefaultMutator<G>
+impl<G, GaState, IndState> Mutator<G, GaState, IndState> for DefaultMutator<G>
 where
     G: Gene + Add<Output = G> + TryFrom<i64>,
     GaState: Sync,
 {
     /// Return a *mutated copy* of the given genome.
     /// Mutants that fall outside the allowed range are discarded (returns `None`).
-    fn mutant(&self, genome: GenomeRef<G>, ctx: &Context<'_, G, GaState>) -> Option<Genome<G>> {
+    fn mutant(&self, genome: GenomeRef<G>, ctx: &Context<'_, G, GaState, IndState>) -> Option<Genome<G>> {
         let sigma = self.config.get(ctx.generation, ctx.config.max_generation);
         let noise = noise_factor(ctx.diversity, ctx.stagnation);
         mutant_with_noise(&self.ranges, sigma, genome, noise, &mut rand::rng())
@@ -51,6 +51,7 @@ mod tests {
             stagnation: 0.0,
             config: &ga_cfg,
             state: &None::<()>,
+            best: &None,
         };
         let mut same = 0usize;
         for _ in 0..100 {
@@ -84,6 +85,7 @@ mod tests {
             stagnation: 0.0,
             config: &ga_cfg,
             state: &None::<()>,
+            best: &None,
         };
         // mutants that land outside the range return None — verify any Some is in range
         for _ in 0..200 {
