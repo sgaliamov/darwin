@@ -1,5 +1,5 @@
 use super::super::genome::{GeneRanges, GeneRangesRef, Genome, GenomeRef};
-use super::config::DefaultEvolutionConfig;
+use super::config::SigmaConfig;
 use super::context::Context;
 use super::Crossover;
 use rand::RngExt;
@@ -9,11 +9,11 @@ use std::iter;
 pub struct DefaultCrossover {
     ranges: GeneRanges,
     groups: Vec<usize>,
-    config: DefaultEvolutionConfig,
+    config: SigmaConfig,
 }
 
 impl DefaultCrossover {
-    pub fn new(ranges: GeneRangesRef, groups: &[usize], config: DefaultEvolutionConfig) -> Self {
+    pub fn new(ranges: GeneRangesRef, groups: &[usize], config: SigmaConfig) -> Self {
         assert!(!groups.is_empty());
         Self { ranges: ranges.to_vec(), groups: groups.to_vec(), config }
     }
@@ -63,18 +63,19 @@ mod tests {
     fn cross_keeps_group_chunks_from_either_parent() {
         let groups = vec![2, 1];
         let ranges = vec![(0, 9), (10, 19), (20, 29)];
-        let config = DefaultEvolutionConfig::default();
+        let config = SigmaConfig::default();
         let generator = DefaultGenerator::new(&ranges);
         let crossover = DefaultCrossover::new(&ranges, &groups, config);
 
         let mom = generator.generate();
         let dad = generator.generate();
 
+        let ga_cfg = crate::Config::default();
         let children = crossover.cross(
             &dad,
             &mom,
             // diversity=1.0, stagnation=0.0 → noise_factor=0.0 → no mutation; pure child is last
-            &Context { generation: 0, diversity: 1.0, stagnation: 0.0, state: &None::<()> },
+            &Context { generation: 0, diversity: 1.0, stagnation: 0.0, config: &ga_cfg, state: &None::<()> },
         );
         let child = &children[children.len() - 1];
 

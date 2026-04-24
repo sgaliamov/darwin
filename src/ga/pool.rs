@@ -134,7 +134,7 @@ impl<State> Pool<State> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Context, DefaultEvolutionConfig, DefaultGenerator, DefaultMutator, Generator, Lineage, Mutator, Pool};
+    use crate::{Config, Context, SigmaConfig, DefaultGenerator, DefaultMutator, Generator, Lineage, Mutator, Pool};
     use itertools::Itertools;
     use rand::{RngExt, SeedableRng, rngs::StdRng};
     use spectral::prelude::*;
@@ -174,9 +174,10 @@ mod tests {
                 .filter_map(|g| {
                     let mutator = DefaultMutator::new(
                         ranges,
-                        DefaultEvolutionConfig { max_mutation_sigma: sigma, min_mutation_sigma: sigma, ..Default::default() },
+                        SigmaConfig { max: sigma, min: sigma },
                     );
-                    mutator.mutant(&[500], &Context { generation: 0, diversity: 0.5, stagnation: 0.0, state: &None::<()> })
+                    let ga_config = Config::default();
+                    mutator.mutant(&[500], &Context { generation: 0, diversity: 0.5, stagnation: 0.0, config: &ga_config, state: &None::<()> })
                         .map(|genome| Individual::<()>::new(genome, Lineage::Mutant(0, g)))
                 })
                 .collect_vec();
@@ -197,9 +198,10 @@ mod tests {
         let std_dev = 0.5; // 5% // 1 - 10% // 2 - 20% // 5 - 50%;
         let mutator = DefaultMutator::new(
             ranges,
-            DefaultEvolutionConfig { max_mutation_sigma: std_dev, min_mutation_sigma: std_dev, ..Default::default() },
+            SigmaConfig { max: std_dev, min: std_dev },
         );
-        let ctx = Context { generation: 0, diversity: 0.5, stagnation: 0.0, state: &None::<()> };
+        let ga_cfg = Config::default();
+        let ctx = Context { generation: 0, diversity: 0.5, stagnation: 0.0, config: &ga_cfg, state: &None::<()> };
 
         let items = (0..100_000)
             .map(|g| {

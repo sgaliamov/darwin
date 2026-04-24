@@ -34,7 +34,7 @@ pub trait Crossover<GaState>: Send + Sync {
 /// Returns `None` if any mutated gene falls outside its declared range.
 fn mutant_with_noise<GaState>(
     ranges: GeneRangesRef,
-    config: &DefaultEvolutionConfig,
+    config: &SigmaConfig,
     genome: GenomeRef,
     ctx: &Context<'_, GaState>,
     noise_factor: f32,
@@ -42,7 +42,7 @@ fn mutant_with_noise<GaState>(
 ) -> Option<Genome> {
     // μ = 0 so shifts are symmetric around the original value.
     let normal =
-        Normal::new(0.0_f32, config.sigma(ctx.generation)).expect("`sigma` should be valid.");
+        Normal::new(0.0_f32, config.sigma(ctx)).expect("`sigma` should be valid.");
     genome
         .iter()
         .enumerate()

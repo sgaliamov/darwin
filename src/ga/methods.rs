@@ -191,6 +191,7 @@ where
         // par_iter_mut can take a mutable borrow of pools independently.
         let evolver = &self.mutator;
         let mutant_count = self.mutant_count;
+        let config = self.config;
         let state = &self.state;
 
         self.pools.par_iter_mut().for_each(|pool| {
@@ -204,6 +205,7 @@ where
                 generation,
                 diversity: pool.diversity(),
                 stagnation: stagnation_boost,
+                config,
                 state,
             };
 
@@ -236,14 +238,12 @@ where
             crossover,
             mutant_count,
             state,
-            config: Config {
-                tournament_size, ..
-            },
+            config,
             ..
         } = self;
 
         let crossover_size = *crossover_size;
-        let tournament_size = *tournament_size;
+        let tournament_size = config.tournament_size;
         let mutant_count = *mutant_count;
         // Coerce to shared ref so the closure is Sync.
         let crossover: &C = crossover;
@@ -280,6 +280,7 @@ where
                                 generation,
                                 diversity,
                                 stagnation: stagnation_boost,
+                                config,
                                 state,
                             },
                         ) {
@@ -456,13 +457,12 @@ mod tests {
             ..Default::default()
         };
 
-        use crate::{DefaultEvolutionConfig, DefaultGenerator, DefaultMutator, DefaultCrossover};
+        use crate::{SigmaConfig, DefaultGenerator, DefaultMutator, DefaultCrossover};
         let ranges: Vec<_> = config.ranges.iter().flatten().cloned().collect();
         let groups: Vec<_> = config.ranges.iter().map(|g| g.len()).collect();
-        let evo_config = DefaultEvolutionConfig {
-            max_mutation_sigma: 1.0,
-            min_mutation_sigma: 0.5,
-            max_generation: config.max_generation,
+        let evo_config = SigmaConfig {
+            max: 1.0,
+            min: 0.5,
         };
         let generator = DefaultGenerator::new(&ranges);
         let mutator = DefaultMutator::new(&ranges, evo_config.clone());
@@ -491,13 +491,12 @@ mod tests {
             ..Default::default()
         };
 
-        use crate::{DefaultEvolutionConfig, DefaultGenerator, DefaultMutator, DefaultCrossover};
+        use crate::{SigmaConfig, DefaultGenerator, DefaultMutator, DefaultCrossover};
         let ranges: Vec<_> = config.ranges.iter().flatten().cloned().collect();
         let groups: Vec<_> = config.ranges.iter().map(|g| g.len()).collect();
-        let evo_config = DefaultEvolutionConfig {
-            max_mutation_sigma: 5.0,
-            min_mutation_sigma: 0.5,
-            max_generation: config.max_generation,
+        let evo_config = SigmaConfig {
+            max: 5.0,
+            min: 0.5,
         };
         let generator = DefaultGenerator::new(&ranges);
         let mutator = DefaultMutator::new(&ranges, evo_config.clone());
@@ -527,13 +526,12 @@ mod tests {
             ..Default::default()
         };
 
-        use crate::{DefaultEvolutionConfig, DefaultGenerator, DefaultMutator, DefaultCrossover};
+        use crate::{SigmaConfig, DefaultGenerator, DefaultMutator, DefaultCrossover};
         let ranges: Vec<_> = config.ranges.iter().flatten().cloned().collect();
         let groups: Vec<_> = config.ranges.iter().map(|g| g.len()).collect();
-        let evo_config = DefaultEvolutionConfig {
-            max_mutation_sigma: 2.0,
-            min_mutation_sigma: 1.0,
-            max_generation: config.max_generation,
+        let evo_config = SigmaConfig {
+            max: 2.0,
+            min: 1.0,
         };
         let generator = DefaultGenerator::new(&ranges);
         let mutator = DefaultMutator::new(&ranges, evo_config.clone());
@@ -558,13 +556,12 @@ mod tests {
     }
 
     fn test_run(config: Config, writer: BufWriter<&mut Vec<u8>>) -> bool {
-        use crate::{DefaultEvolutionConfig, DefaultGenerator, DefaultMutator, DefaultCrossover};
+        use crate::{SigmaConfig, DefaultGenerator, DefaultMutator, DefaultCrossover};
         let ranges: Vec<_> = config.ranges.iter().flatten().cloned().collect();
         let groups: Vec<_> = config.ranges.iter().map(|g| g.len()).collect();
-        let evo_config = DefaultEvolutionConfig {
-            max_mutation_sigma: 2.0,
-            min_mutation_sigma: 1.0,
-            max_generation: config.max_generation,
+        let evo_config = SigmaConfig {
+            max: 2.0,
+            min: 1.0,
         };
         let generator = DefaultGenerator::new(&ranges);
         let mutator = DefaultMutator::new(&ranges, evo_config.clone());
