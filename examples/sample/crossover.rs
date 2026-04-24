@@ -1,5 +1,5 @@
 use super::{mutant_with_noise, noise_factor};
-use crate::{Context, Crossover, Gene, GeneRanges, GeneRangesRef, Genome, GenomeRef, Sigma};
+use darwin::{Context, Crossover, Gene, GeneRanges, GeneRangesRef, Genome, GenomeRef, Sigma};
 use rand::RngExt;
 use std::iter;
 use std::ops::Add;
@@ -75,7 +75,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{DefaultGenerator, Generator};
+    use super::super::DefaultGenerator;
+    use darwin::{Config, Generator};
 
     #[test]
     fn cross_keeps_group_chunks_from_either_parent() {
@@ -88,7 +89,7 @@ mod tests {
         let mom = generator.generate();
         let dad = generator.generate();
 
-        let ga_cfg = crate::Config::default();
+        let ga_cfg = Config::default();
         let children = crossover.cross(
             &dad,
             &mom,

@@ -1,7 +1,7 @@
 mod crossover;
 mod generator;
 mod mutator;
-use crate::{Gene, GeneRangesRef, Genome, GenomeRef};
+use darwin::{Gene, GeneRangesRef, Genome, GenomeRef};
 pub use crossover::*;
 pub use generator::*;
 pub use mutator::*;
@@ -10,7 +10,7 @@ use std::ops::Add;
 
 /// Noise scaling factor derived from GA pressure signals.
 /// High diversity → exploit (low noise); high stagnation → explore (high noise).
-pub(crate) fn noise_factor(diversity: f32, stagnation: f32) -> f32 {
+pub fn noise_factor(diversity: f32, stagnation: f32) -> f32 {
     let base = 1.0 - diversity;
     base + stagnation * (1.0 - base)
 }

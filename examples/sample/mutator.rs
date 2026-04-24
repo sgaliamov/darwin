@@ -1,4 +1,4 @@
-use crate::{Context, Gene, GeneRanges, GeneRangesRef, Genome, GenomeRef, Mutator, Sigma};
+use darwin::{Context, Gene, GeneRanges, GeneRangesRef, Genome, GenomeRef, Mutator, Sigma};
 use rand::distr::uniform::SampleUniform;
 use std::ops::Add;
 use super::{noise_factor, mutant_with_noise};
@@ -35,7 +35,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Config, Context, Sigma};
+    use darwin::{Config, Context, Sigma};
     use spectral::prelude::*;
 
     /// `mutant` with low sigma and high diversity (noise≈0) almost always returns the same genome.

@@ -123,8 +123,7 @@ impl<G: Gene, State> Pool<G, State> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Config, Context, Sigma, DefaultGenerator, DefaultMutator, Generator, Lineage, Mutator, Pool};
-    use crate::ga::evolution::noise_factor;
+    use crate::Pool;
     #[allow(dead_code)]
     type G = i64;
     use itertools::Itertools;
@@ -134,10 +133,9 @@ mod tests {
     #[test]
     fn test_diversity() {
         let ranges = &[(0, 1_000); 100];
-        let generator = DefaultGenerator::new(ranges);
 
         let individuals = (0..100)
-            .map(|_| Individual::<_, ()>::firstborn(0, generator.generate()))
+            .map(|_| Individual::<_, ()>::firstborn(0, random_genome(ranges)))
             .collect_vec();
 
         let mut pool = Pool::new(0, individuals);
@@ -145,92 +143,6 @@ mod tests {
 
         // completely random items gives ~0.33
         assert_that!(actual).is_close_to(0.333, 0.02);
-    }
-
-    #[test]
-    fn test_mutants() {
-        let ranges = &[(0, 1000)];
-        let test_cases = &[
-            // sigma, tolerance
-            (0.05, 1e-6), // no deviations
-            (0.1, 1e-6),  // 499 - 501 - min deviations
-            (2., 1e-4),   // 490 - 511
-            (20., 1e-2),  // 400 - 600
-            (50., 0.05),  // 250 - 750
-            (100., 0.1),  // 0 - 1000 - full bell
-            (1000., 1.0), // flat, but drops 2/3 populations
-        ];
-
-        for &(sigma, tolerance) in test_cases {
-            let items = (0..1_000)
-                .filter_map(|g| {
-                    let mutator = DefaultMutator::new(
-                        ranges,
-                        Sigma { max: sigma, min: sigma },
-                    );
-                    let ga_config = Config::default();
-                    mutator.mutant(&[500i64], &Context { generation: 0, diversity: 0.5, stagnation: 0.0, config: &ga_config, state: &None::<()> })
-                        .map(|genome| Individual::<_, ()>::new(genome, Lineage::Mutant(0, g)))
-                })
-                .collect_vec();
-
-            let _left = items.len();
-            let mut pool = Pool::new(0, items);
-            let actual = pool.calc_diversity(ranges);
-
-            asserting(&format!("Sigma {sigma}"))
-                .that(&actual)
-                .is_close_to(0.0, tolerance);
-        }
-    }
-
-    // #[test]
-    fn _tuning() {
-        let ranges = &[(0, 100)];
-        let std_dev = 0.5; // 5% // 1 - 10% // 2 - 20% // 5 - 50%;
-        let mutator = DefaultMutator::new(
-            ranges,
-            Sigma { max: std_dev, min: std_dev },
-        );
-        let ga_cfg = Config::default();
-        let ctx = Context { generation: 0, diversity: 0.5, stagnation: 0.0, config: &ga_cfg, state: &None::<()> };
-
-        let items = (0..100_000)
-            .map(|g| {
-                let genome = mutator.mutant(&[50], &ctx).unwrap();
-                Individual::<_, ()>::new(genome, Lineage::Mutant(0, g))
-            })
-            .collect_vec();
-
-        let left = items.len();
-        let mut pool = Pool::new(0, items);
-        let actual = pool.calc_diversity(ranges);
-
-        // to tune sigma
-        let genomes = pool
-            .individuals
-            .into_iter()
-            .flat_map(|x| x.genome)
-            .sorted()
-            .chunk_by(|&x| x)
-            .into_iter()
-            .map(|x| (x.0, x.1.count()))
-            .collect_vec();
-        let min_max = genomes.iter().minmax_by_key(|x| x.1).into_option().unwrap();
-        let avg = genomes.iter().map(|x| x.1 as f32).sum::<f32>() as usize / genomes.len();
-        println!(
-            "{:#?}\n{}: [{:?}, {:?}, {:?}, {:?}, {}]\n{actual}\n",
-            genomes
-                .iter()
-                .map(|x| format!("{}: {}", x.0, x.1))
-                .collect_vec(),
-            left,
-            genomes.first().unwrap(),
-            min_max.0,
-            min_max.1,
-            genomes.last().unwrap(),
-            avg
-        );
     }
 
     #[test]
@@ -332,9 +244,8 @@ mod tests {
 
     fn test_remove_duplicates() {
         let ranges = &[(0, 1_000); 10];
-        let generator = DefaultGenerator::new(ranges);
-        let i1 = Individual::firstborn(0, generator.generate());
-        let i2 = Individual::firstborn(0, generator.generate());
+        let i1 = Individual::firstborn(0, random_genome(ranges));
+        let i2 = Individual::firstborn(0, random_genome(ranges));
         let i3 = Individual::new(i2.genome.clone(), i2.lineage.clone());
 
         let mut pool = Pool::<_, ()>::new(0, vec![i1, i2, i3]);
@@ -346,8 +257,7 @@ mod tests {
     #[test]
     fn test_deduplication_keeps_with_fitness() {
         let ranges = &[(0, 1_000); 10];
-        let generator = DefaultGenerator::new(ranges);
-        let i1 = Individual::firstborn(0, generator.generate());
+        let i1 = Individual::firstborn(0, random_genome(ranges));
         let mut i2 = Individual::<_, ()>::new(i1.genome.clone(), i1.lineage.clone());
         i2.fitness = 1.0;
         let mut pool = Pool::new(0, vec![i1, i2]);
@@ -358,23 +268,8 @@ mod tests {
         assert_that!(pool.individuals[0].fitness).is_equal_to(1.0);
     }
 
-    #[test]
-    fn test_noise_factor_with_stagnation() {
-        let test_cases = [
-            // (diversity, stagnation_boost, expected_noise)
-            (0.0, 0.0, 1.0),  // low diversity, no stagnation → max noise
-            (1.0, 0.0, 0.0),  // high diversity, no stagnation → min noise
-            (0.5, 0.0, 0.5),  // mid diversity, no stagnation → mid noise
-            (0.0, 1.0, 1.0),  // low diversity, max stagnation → max noise
-            (1.0, 1.0, 1.0),  // high diversity, max stagnation → max noise (forced exploration)
-            (0.5, 0.5, 0.75), // mid diversity, mid stagnation → boosted noise
-            (0.8, 0.5, 0.6), // high diversity (0.2 base noise), mid stagnation → 0.2 + 0.5 * 0.8 = 0.6
-        ];
-
-        for (div, boost, expected) in test_cases {
-            asserting(&format!("Noise for diversity={div}, boost={boost}"))
-                .that(&noise_factor(div, boost))
-                .is_close_to(expected, 1e-6);
-        }
+    fn random_genome(ranges: &[(i64, i64)]) -> Vec<i64> {
+        let mut rng = rand::rng();
+        ranges.iter().map(|r| rng.random_range(r.0..=r.1)).collect()
     }
 }

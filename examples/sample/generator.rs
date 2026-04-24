@@ -1,4 +1,4 @@
-use crate::{Gene, GeneRanges, GeneRangesRef, Generator, Genome};
+use darwin::{Gene, GeneRanges, GeneRangesRef, Generator, Genome};
 use rand::RngExt;
 use rand::distr::uniform::SampleUniform;
 
