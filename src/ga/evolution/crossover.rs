@@ -10,6 +10,7 @@ pub struct DefaultCrossover {
 }
 
 impl DefaultCrossover {
+    // todo: use vector of ranges and calculate groups from it
     pub fn new(ranges: GeneRangesRef, groups: &[usize], config: Sigma) -> Self {
         assert!(!groups.is_empty());
         Self {
