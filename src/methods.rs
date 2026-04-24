@@ -124,6 +124,7 @@ where
                 config: self.config,
                 state: &self.state,
                 best: &self.best,
+                pools: &self.pools,
                 __: std::marker::PhantomData,
             };
             self.callback.call(&ctx, &self.pools);
@@ -152,38 +153,61 @@ where
     /// fitness. Truncate back to `population_size` in case parents + offspring
     /// exceeded the limit.
     fn evaluate_generation(&mut self, generation: usize) {
-        let best = &self.best;
         let config = self.config;
-        let state = &self.state;
-        let scorer = &self.scorer;
         let flat_genome = &self.flat_genome;
         let population_size = config.population_size;
         let stagnation = (self.stagnation_counter as f32 / config.stagnation_count as f32).min(1.0);
 
+        // Phase 1: remove duplicates before scoring.
+        self.pools.par_iter_mut().for_each(|pool| pool.dedup());
+
+        // Phase 2: score unscored individuals — immutable borrow lets ctx hold &pools.
+        let scores: Vec<Vec<(usize, f64, Option<IndState>)>> = {
+            let best = &self.best;
+            let state = &self.state;
+            let scorer = &self.scorer;
+            let pools = &self.pools;
+
+            pools
+                .par_iter()
+                .map(|pool| {
+                    let ctx = Context::<G, GaState, IndState> {
+                        generation,
+                        diversity: pool.diversity(),
+                        stagnation,
+                        config,
+                        state,
+                        best,
+                        pools,
+                        __: std::marker::PhantomData,
+                    };
+                    pool.individuals
+                        .par_iter()
+                        .enumerate()
+                        .filter(|(_, ind)| !ind.fitness.is_finite())
+                        .map(|(i, ind)| {
+                            let (fitness, s) = scorer.score(&ind.genome, &ctx);
+                            (i, fitness, s)
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .collect()
+        };
+
+        // Phase 3: apply collected scores.
+        for (pool_scores, pool) in scores.into_iter().zip(self.pools.iter_mut()) {
+            for (idx, fitness, state) in pool_scores {
+                pool.individuals[idx].fitness = fitness;
+                pool.individuals[idx].state = state; // todo: why ind state here?
+            }
+        }
+
+        // Phase 4: housekeeping — retain, sort, truncate, update diversity.
         self.pools.par_iter_mut().for_each(|pool| {
-            pool.dedup();
-
-            let ctx = Context::<G, GaState, IndState> {
-                generation,
-                diversity: pool.diversity(), // todo: pass the pool?
-                stagnation,
-                config,
-                state,
-                best,
-                __: std::marker::PhantomData,
-            };
-
-            pool.individuals
-                .par_iter_mut()
-                .for_each(|ind| ind.evaluate(scorer, &ctx));
-
             pool.individuals.retain(|ind| ind.fitness.is_finite());
-
             pool.individuals
                 .sort_unstable_by(|a, b| b.fitness.total_cmp(&a.fitness));
-
             pool.individuals.truncate(population_size);
-
             // diversity need to be updated before callback to provide actual state.
             pool.calc_diversity(flat_genome);
         });
@@ -222,22 +246,20 @@ where
         let stagnation_boost =
             (self.stagnation_counter as f32 / self.config.stagnation_count as f32).min(1.0);
 
-        // Borrow evolver and mutant_count before the parallel loop so that
-        // par_iter_mut can take a mutable borrow of pools independently.
         let evolver = &self.mutator;
         let mutant_count = self.mutant_count;
         let config = self.config;
         let state = &self.state;
         let best = &self.best;
+        let pools = &self.pools;
 
-        self.pools.par_iter_mut().for_each(|pool| {
-            if pool.individuals.is_empty() {
-                return;
-            }
-
-            let m = mutant_count.min(pool.individuals.len());
-
-            let mutants = {
+        let mutants: Vec<(usize, Vec<Individual<G, IndState>>)> = self
+            .pools
+            .par_iter()
+            .enumerate()
+            .filter(|(_, pool)| !pool.individuals.is_empty())
+            .map(|(idx, pool)| {
+                let m = mutant_count.min(pool.individuals.len());
                 let ctx = Context::<G, GaState, IndState> {
                     generation,
                     diversity: pool.diversity(),
@@ -245,9 +267,10 @@ where
                     config,
                     state,
                     best,
+                    pools,
                     __: std::marker::PhantomData,
                 };
-                pool.individuals[..m]
+                let new_mutants = pool.individuals[..m]
                     .iter()
                     .filter_map(|parent| {
                         evolver
@@ -257,11 +280,14 @@ where
                     .map(|(genome, parent)| {
                         Individual::new(genome, Lineage::Mutant(generation, parent))
                     })
-                    .collect_vec()
-            };
+                    .collect_vec();
+                (idx, new_mutants)
+            })
+            .collect();
 
-            pool.individuals.extend(mutants);
-        });
+        for (idx, new_mutants) in mutants {
+            self.pools[idx].individuals.extend(new_mutants);
+        }
     }
 
     /// Recombine pools into offspring, possibly mutate, then migrate them.
@@ -323,6 +349,7 @@ where
                                 config,
                                 state,
                                 best,
+                                pools: &*pools,
                                 __: std::marker::PhantomData,
                             },
                         ) {
@@ -367,29 +394,40 @@ where
         let state = &self.state;
         let best = &self.best;
         let stagnation = (self.stagnation_counter as f32 / config.stagnation_count as f32).min(1.0);
+        let pools = &self.pools;
 
-        self.pools.par_iter_mut().for_each(|pool| {
-            let current_cnt = pool.individuals.len();
-            let deficit = target.saturating_sub(current_cnt);
-            let count = quota.max(deficit);
-            let ctx = Context::<G, GaState, IndState> {
-                generation,
-                diversity: pool.diversity(),
-                stagnation,
-                config,
-                state,
-                best,
-                __: std::marker::PhantomData,
-            };
+        let immigrants: Vec<(usize, Vec<Individual<G, IndState>>)> = self
+            .pools
+            .par_iter()
+            .enumerate()
+            .map(|(idx, pool)| {
+                let current_cnt = pool.individuals.len();
+                let deficit = target.saturating_sub(current_cnt);
+                let count = quota.max(deficit);
+                let ctx = Context::<G, GaState, IndState> {
+                    generation,
+                    diversity: pool.diversity(),
+                    stagnation,
+                    config,
+                    state,
+                    best,
+                    pools,
+                    __: std::marker::PhantomData,
+                };
 
-            let new_individuals = std::iter::repeat_with(|| {
-                Individual::firstborn(generation, evolver.generate(&ctx))
+                let new_individuals = std::iter::repeat_with(|| {
+                    Individual::firstborn(generation, evolver.generate(&ctx))
+                })
+                .take(count)
+                .collect::<Vec<_>>();
+
+                (idx, new_individuals)
             })
-            .take(count)
-            .collect::<Vec<_>>();
+            .collect();
 
-            pool.individuals.extend(new_individuals);
-        });
+        for (idx, new_individuals) in immigrants {
+            self.pools[idx].individuals.extend(new_individuals);
+        }
     }
 
     /// Check for stagnation: if the global best has not improved for a

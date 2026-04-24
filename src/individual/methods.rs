@@ -36,7 +36,7 @@ impl<G: Gene, IndState> Individual<G, IndState> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Config;
+    use crate::{Config, Pools};
     use spectral::prelude::*;
 
     fn const_score(genome: &[i64], _: &Context<'_, i64, (), ()>) -> (f64, Option<()>) {
@@ -54,7 +54,8 @@ mod tests {
     #[test]
     fn evaluate_sets_fitness() {
         let cfg = Config::<i64>::default();
-        let ctx = Context::<i64, (), ()> { generation: 0, diversity: 0.0, stagnation: 0.0, config: &cfg, state: &None, best: &None, __: std::marker::PhantomData };
+        let pools = Pools::<i64, ()>::default();
+        let ctx = Context::<i64, (), ()> { generation: 0, diversity: 0.0, stagnation: 0.0, config: &cfg, state: &None, best: &None, pools: &pools, __: std::marker::PhantomData };
         let mut ind = Individual::<i64, ()>::firstborn(0, vec![1, 2, 3]);
         ind.evaluate(&const_score, &ctx);
         assert_that!(ind.fitness).is_equal_to(3.0);
@@ -64,7 +65,8 @@ mod tests {
     #[test]
     fn evaluate_is_idempotent() {
         let cfg = Config::<i64>::default();
-        let ctx = Context::<i64, (), ()> { generation: 0, diversity: 0.0, stagnation: 0.0, config: &cfg, state: &None, best: &None, __: std::marker::PhantomData };
+        let pools = Pools::<i64, ()>::default();
+        let ctx = Context::<i64, (), ()> { generation: 0, diversity: 0.0, stagnation: 0.0, config: &cfg, state: &None, best: &None, pools: &pools, __: std::marker::PhantomData };
         let mut ind = Individual::<i64, ()>::firstborn(0, vec![1, 2, 3]);
         ind.evaluate(&const_score, &ctx);
         // Override the genome to verify score is NOT recomputed.
