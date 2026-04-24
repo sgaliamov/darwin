@@ -1,5 +1,6 @@
-﻿use crate::{Gene,
-    CallbackFn, Config, Context, Crossover, Generator, GeneticAlgorithm, Individual, Lineage, Mutator, Pool, Pools, ScoreFn
+﻿use crate::{
+    CallbackFn, Config, Context, Crossover, Gene, Generator, GeneticAlgorithm, Individual, Lineage,
+    Mutator, Pool, Pools, ScoreFn,
 };
 use itertools::Itertools;
 use rand::prelude::*;
@@ -350,4 +351,3 @@ where
         self.stagnation_counter >= self.config.stagnation_count
     }
 }
-
