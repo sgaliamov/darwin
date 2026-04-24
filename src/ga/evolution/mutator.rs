@@ -1,7 +1,7 @@
-use crate::{Context, Gene, GeneRanges, GeneRangesRef, Genome, GenomeRef, Mutator};
+use crate::{Context, Gene, GeneRanges, GeneRangesRef, Genome, GenomeRef, Mutator, Sigma};
 use rand::distr::uniform::SampleUniform;
 use std::ops::Add;
-use super::{Sigma, noise_factor, mutant_with_noise};
+use super::{noise_factor, mutant_with_noise};
 
 /// Produces mutated genome copies via Gaussian noise.
 pub struct DefaultMutator<G> {

@@ -1,8 +1,8 @@
-use crate::{Context, Crossover, Gene, GeneRanges, GeneRangesRef, Genome, GenomeRef};
+use super::{mutant_with_noise, noise_factor};
+use crate::{Context, Crossover, Gene, GeneRanges, GeneRangesRef, Genome, GenomeRef, Sigma};
 use rand::RngExt;
 use std::iter;
 use std::ops::Add;
-use super::{Sigma, noise_factor, mutant_with_noise};
 
 /// Produces offspring by group-chunked crossover, with optional post-cross mutation.
 pub struct DefaultCrossover<G> {

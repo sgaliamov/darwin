@@ -1,4 +1,4 @@
-/// Configuration for the built-in [`super::default_evolution::DefaultEvolution`] evolver.
+/// Configuration for the built-in default evolver.
 /// Kept separate from [`crate::Config`] so GA config stays evolver-agnostic.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Sigma {
@@ -10,15 +10,13 @@ pub struct Sigma {
 }
 
 impl Sigma {
-    /// Linear annealing: sigma decreases from `max` to
-    /// `min` over `ctx.config.max_generation` generations.
-    pub fn get<GaState>(&self, ctx: &super::Context<'_, GaState>) -> f32 {
-        let max_gen = ctx.config.max_generation;
-        if max_gen <= 1 {
+    /// Linear annealing: sigma decreases from `max` to `min` over `max_generation` generations.
+    pub fn get(&self, generation: usize, max_generation: usize) -> f32 {
+        if max_generation <= 1 {
             return self.min;
         }
-        let step = (self.max - self.min) / (max_gen - 1) as f32;
-        (self.max - step * ctx.generation as f32).max(self.min)
+        let step = (self.max - self.min) / (max_generation - 1) as f32;
+        (self.max - step * generation as f32).max(self.min)
     }
 }
 
@@ -34,35 +32,27 @@ impl Default for Sigma {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Config, Context};
     use spectral::prelude::*;
 
     /// Sigma at gen 0 = max; at last gen ≈ min.
     #[test]
     fn sigma_anneals_from_max_to_min() {
         let cfg = Sigma { max: 10.0, min: 1.0 };
-        let ga_cfg = Config { max_generation: 10, ..Config::default() };
-        let ctx0 = Context { generation: 0, diversity: 0.0, stagnation: 0.0, config: &ga_cfg, state: &None::<()> };
-        let ctx9 = Context { generation: 9, diversity: 0.0, stagnation: 0.0, config: &ga_cfg, state: &None::<()> };
-        assert_that!(cfg.get(&ctx0)).is_close_to(10.0, 1e-5);
-        assert_that!(cfg.get(&ctx9)).is_close_to(1.0, 1e-5);
+        assert_that!(cfg.get(0, 10)).is_close_to(10.0, 1e-5);
+        assert_that!(cfg.get(9, 10)).is_close_to(1.0, 1e-5);
     }
 
     /// Sigma never drops below min even past max_generation.
     #[test]
     fn sigma_floors_at_min() {
         let cfg = Sigma { max: 5.0, min: 2.0 };
-        let ga_cfg = Config { max_generation: 5, ..Config::default() };
-        let ctx = Context { generation: 9999, diversity: 0.0, stagnation: 0.0, config: &ga_cfg, state: &None::<()> };
-        assert_that!(cfg.get(&ctx)).is_equal_to(2.0);
+        assert_that!(cfg.get(9999, 5)).is_equal_to(2.0);
     }
 
     /// Single-generation config always returns min.
     #[test]
     fn sigma_single_generation_returns_min() {
         let cfg = Sigma { max: 8.0, min: 0.5 };
-        let ga_cfg = Config { max_generation: 1, ..Config::default() };
-        let ctx = Context { generation: 0, diversity: 0.0, stagnation: 0.0, config: &ga_cfg, state: &None::<()> };
-        assert_that!(cfg.get(&ctx)).is_equal_to(0.5);
+        assert_that!(cfg.get(0, 1)).is_equal_to(0.5);
     }
 }

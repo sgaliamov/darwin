@@ -1,13 +1,11 @@
 mod crossover;
 mod generator;
 mod mutator;
-mod sigma;
 use crate::{Gene, GeneRangesRef, Genome, GenomeRef};
 pub use crossover::*;
 pub use generator::*;
 pub use mutator::*;
 use rand_distr::{Distribution, Normal};
-pub use sigma::*;
 use std::ops::Add;
 
 /// Noise scaling factor derived from GA pressure signals.

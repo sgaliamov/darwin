@@ -5,12 +5,15 @@ mod genome;
 mod methods;
 mod pool;
 mod pools;
+mod sigma;
+
 pub use config::*;
 pub use context::*;
 pub use evolution::*;
 pub use genome::*;
 pub use pool::*;
 pub use pools::*;
+pub use sigma::*;
 
 /// Generates random genomes; must be `Send + Sync` for Rayon sharing.
 pub trait Generator<G: Gene>: Send + Sync {
