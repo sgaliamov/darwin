@@ -7,10 +7,10 @@ mod tests {
     use sample::{DefaultCrossover, DefaultGenerator, DefaultMutator};
     use itertools::Itertools;
     use spectral::prelude::*;
-    use std::cell::RefCell;
+    use std::sync::Mutex;
     use std::io::{BufWriter, Write};
 
-    type State<'a> = (&'a Config<i64>, RefCell<BufWriter<&'a mut Vec<u8>>>);
+    type State<'a> = (&'a Config<i64>, Mutex<BufWriter<&'a mut Vec<u8>>>);
 
     /// Fitness = ∑x² → 0 at the origin.
     fn sphere(genome: GenomeRef<i64>, _ctx: &Context<'_, i64, State, ()>) -> (f64, Option<()>) {
@@ -27,7 +27,7 @@ mod tests {
         pools: &Pools<i64, ()>,
     ) {
         let (config, writer) = ctx.state.as_ref().unwrap();
-        let mut writer = writer.borrow_mut();
+        let mut writer = writer.lock().unwrap();
         let g = ctx.generation;
 
         for pool in pools.iter() {
@@ -105,11 +105,10 @@ mod tests {
         };
 
         let ranges: Vec<_> = config.ranges.iter().flatten().cloned().collect();
-        let groups: Vec<_> = config.ranges.iter().map(|g| g.len()).collect();
         let evo_config = Sigma { max: 1.0, min: 0.5 };
         let generator = DefaultGenerator::new(&ranges);
         let mutator = DefaultMutator::new(&ranges, evo_config.clone());
-        let crossover = DefaultCrossover::new(&ranges, &groups, evo_config);
+        let crossover = DefaultCrossover::new(&config.ranges, evo_config);
         let mut ga = GeneticAlgorithm::<i64, (), (), _, _, _, _, _>::new(
             &config, generator, mutator, crossover,
             |g: GenomeRef<i64>, _: &Context<'_, i64, (), ()>| (-(g[0] as f64).powi(2), None),
@@ -136,8 +135,10 @@ mod tests {
         };
 
         let ranges: Vec<_> = config.ranges.iter().flatten().cloned().collect();
-        let groups: Vec<_> = config.ranges.iter().map(|g| g.len()).collect();
-        let crossover = DefaultCrossover::new(&ranges, &groups, evo_config);
+        let evo_config = Sigma { max: 2.0, min: 1.0 };
+        let generator = DefaultGenerator::new(&ranges);
+        let mutator = DefaultMutator::new(&ranges, evo_config.clone());
+        let crossover = DefaultCrossover::new(&config.ranges, evo_config);
         let mut ga = GeneticAlgorithm::<i64, (), (), _, _, _, _, _>::new(
             &config, generator, mutator, crossover,
             |g: GenomeRef<i64>, _: &Context<'_, i64, (), ()>| (-(g[0] as f64).powi(2), None),
@@ -162,11 +163,10 @@ mod tests {
         };
 
         let ranges: Vec<_> = config.ranges.iter().flatten().cloned().collect();
-        let groups: Vec<_> = config.ranges.iter().map(|g| g.len()).collect();
         let evo_config = Sigma { max: 2.0, min: 1.0 };
         let generator = DefaultGenerator::new(&ranges);
         let mutator = DefaultMutator::new(&ranges, evo_config.clone());
-        let crossover = DefaultCrossover::new(&ranges, &groups, evo_config);
+        let crossover = DefaultCrossover::new(&config.ranges, evo_config);
         let mut ga = GeneticAlgorithm::<i64, (), (), _, _, _, _, _>::new(
             &config, generator, mutator, crossover, sphere_no_state, NoopCallback,
         );
@@ -211,13 +211,12 @@ mod tests {
 
     fn test_run(config: Config<i64>, writer: BufWriter<&mut Vec<u8>>) -> bool {
         let ranges: Vec<(i64, i64)> = config.ranges.iter().flatten().cloned().collect();
-        let groups: Vec<_> = config.ranges.iter().map(|g| g.len()).collect();
         let evo_config = Sigma { max: 2.0, min: 1.0 };
         let generator = DefaultGenerator::new(&ranges);
         let mutator = DefaultMutator::new(&ranges, evo_config.clone());
-        let crossover = DefaultCrossover::new(&ranges, &groups, evo_config);
+        let crossover = DefaultCrossover::new(&config.ranges, evo_config);
         let mut ga = GeneticAlgorithm::new(&config, generator, mutator, crossover, sphere, callback_fn);
-        ga.set_state((&config, RefCell::new(writer)));
+        ga.set_state((&config, Mutex::new(writer)));
         let pools = ga.run();
         pools
             .top_individuals_mut(config.bests)

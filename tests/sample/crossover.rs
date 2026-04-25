@@ -76,7 +76,8 @@ where
 mod tests {
     use super::*;
     use super::super::DefaultGenerator;
-    use darwin::{Config, Generator};
+    use darwin::{Config, Generator, Pools};
+    use std::marker::PhantomData;
 
     #[test]
     fn cross_keeps_group_chunks_from_either_parent() {
@@ -88,6 +89,7 @@ mod tests {
         let crossover = DefaultCrossover::new(&range_set, config);
 
         let ga_cfg = Config::default();
+        let pools = Pools::from_vec(vec![]);
         let ctx = Context::<i64, (), ()> {
             generation: 0,
             diversity: 1.0,
@@ -95,6 +97,8 @@ mod tests {
             config: &ga_cfg,
             state: &None::<()>,
             best: &None,
+            pools: &pools,
+            __: PhantomData,
         };
         let mom = generator.generate(&ctx);
         let dad = generator.generate(&ctx);

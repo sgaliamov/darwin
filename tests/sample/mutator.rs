@@ -45,6 +45,7 @@ mod tests {
         let genome = vec![500_000i64];
         // diversity=1, stagnation=0 → noise_factor=0 → shift is ~0 almost always
         let ga_cfg = Config::default();
+        let pools = darwin::Pools::<i64, ()>::from_vec(vec![]);
         let ctx = Context {
             generation: 0,
             diversity: 1.0,
@@ -52,6 +53,8 @@ mod tests {
             config: &ga_cfg,
             state: &None::<()>,
             best: &None,
+            pools: &pools,
+            __: std::marker::PhantomData,
         };
         let mut same = 0usize;
         for _ in 0..100 {
@@ -79,6 +82,7 @@ mod tests {
             max_generation: 100,
             ..Config::default()
         };
+        let pools = darwin::Pools::<i64, ()>::from_vec(vec![]);
         let ctx = Context {
             generation: 0,
             diversity: 0.0,
@@ -86,6 +90,8 @@ mod tests {
             config: &ga_cfg,
             state: &None::<()>,
             best: &None,
+            pools: &pools,
+            __: std::marker::PhantomData,
         };
         // mutants that land outside the range return None — verify any Some is in range
         for _ in 0..200 {
