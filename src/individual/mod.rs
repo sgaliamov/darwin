@@ -12,8 +12,11 @@ pub struct Individual<G, State> {
     pub lineage: Lineage,
 
     /// Flat DNA.
-    // tbd: [ga] group genomes like in the config.
     pub genome: Genome<G>,
+
+    /// Cached fitness.
     pub fitness: f64,
+
+    /// State returned by scorer. Can be used for memoization or to pass info from scorer to callback.
     pub state: Option<State>,
 }

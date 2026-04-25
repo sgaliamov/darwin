@@ -15,7 +15,9 @@ impl<G: Gene + SampleUniform> DefaultGenerator<G> {
     }
 }
 
-impl<G: Gene + SampleUniform, GaState, IndState> Generator<G, GaState, IndState> for DefaultGenerator<G> {
+impl<G: Gene + SampleUniform, GaState, IndState> Generator<G, GaState, IndState>
+    for DefaultGenerator<G>
+{
     /// Produce a random genome; each gene is drawn uniformly from its range.
     fn generate(&self, _ctx: &Context<'_, G, GaState, IndState>) -> Genome<G> {
         let mut rng = rand::rng();
@@ -45,8 +47,11 @@ mod tests {
         let cfg = Config::<i64>::default();
         let pools = darwin::Pools::<i64, ()>::from_vec(vec![]);
         let ctx = Context::<i64, (), ()> {
-            generation: 0, diversity: 0.0, stagnation: 0.0,
-            config: &cfg, state: &None,
+            generation: 0,
+            diversity: 0.0,
+            stagnation: 0.0,
+            config: &cfg,
+            state: &None,
             pools: &pools,
             __: std::marker::PhantomData,
         };

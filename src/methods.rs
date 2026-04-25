@@ -41,7 +41,7 @@ where
         );
 
         // Pre-compute counts so we do not recompute every generation.
-        let mutant_count = config.mutant_count();
+        let mutant_count = config.mutants_count();
 
         let immigrant_count = (config.population_size as f32 * config.random_ratio)
             .ceil()
@@ -106,26 +106,29 @@ where
     pub fn run(&mut self) -> &mut Pools<G, IndState> {
         self.reset();
 
-        // tbd: [future, ga] identical pools should be merged to save computation time.
+        // todo: [future, ga] identical pools should be merged to save computation time.
         for generation in 0..=self.config.max_generation {
             self.mutate(generation);
             self.recombine(generation);
             self.random(generation);
             self.evaluate_generation(generation);
 
-            let improved = self.pools.best()
+            let improved = self
+                .pools
+                .best()
                 .is_some_and(|(_, f)| f > self.best_fitness);
+
             if improved {
                 self.best_fitness = self.pools.best().unwrap().1;
             }
 
-            let stagnation_ratio =
+            let stagnation =
                 (self.stagnation_counter as f32 / self.config.stagnation_count as f32).min(1.0);
 
             let ctx = Context::<G, GaState, IndState> {
                 generation,
                 diversity: f32::NAN, // todo: wtf?
-                stagnation: stagnation_ratio,
+                stagnation,
                 config: self.config,
                 state: &self.state,
                 pools: &self.pools,
@@ -200,7 +203,7 @@ where
         for (pool_scores, pool) in scores.into_iter().zip(self.pools.iter_mut()) {
             for (idx, fitness, state) in pool_scores {
                 pool.individuals[idx].fitness = fitness;
-                pool.individuals[idx].state = state; // todo: why ind state here?
+                pool.individuals[idx].state = state;
             }
         }
 
@@ -218,7 +221,7 @@ where
     /// Spawn elite mutants inside every pool.
     fn mutate(&mut self, generation: usize) {
         // Calculate stagnation boost: ratio grows as we get stuck
-        let stagnation_boost =
+        let stagnation =
             (self.stagnation_counter as f32 / self.config.stagnation_count as f32).min(1.0);
 
         let evolver = &self.mutator;
@@ -237,7 +240,7 @@ where
                 let ctx = Context::<G, GaState, IndState> {
                     generation,
                     diversity: pool.diversity(),
-                    stagnation: stagnation_boost,
+                    stagnation,
                     config,
                     state,
                     pools,
@@ -267,7 +270,7 @@ where
     /// Short story: pair pools, breed `crossover_size` times, push kids to a chosen pool.
     fn recombine(&mut self, generation: usize) {
         // todo: should use stagnation_counter directly?
-        let stagnation_boost =
+        let stagnation =
             (self.stagnation_counter as f32 / self.config.stagnation_count as f32).min(1.0);
 
         let Self {
@@ -317,7 +320,7 @@ where
                             &Context::<G, GaState, IndState> {
                                 generation,
                                 diversity,
-                                stagnation: stagnation_boost,
+                                stagnation,
                                 config,
                                 state,
                                 pools: &*pools,

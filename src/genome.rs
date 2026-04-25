@@ -31,5 +31,5 @@ pub type GeneRanges<G> = Vec<GeneRange<G>>;
 /// Borrowed per-gene ranges.
 pub type GeneRangesRef<'a, G> = &'a [GeneRange<G>];
 
-/// Collection of genome range sets; one `GeneRanges` entry per pool.
+/// Collection of genome range sets.
 pub type RangeSet<G> = Vec<GeneRanges<G>>;

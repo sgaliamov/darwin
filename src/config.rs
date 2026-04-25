@@ -1,8 +1,6 @@
 use crate::{Gene, Genome, RangeSet};
 use serde::Deserialize;
 
-// tbd: [future, ga] type of ranges can be generic.
-//      it will allow to define them in domain-specific way, like percentages, time intervals, etc.
 /// Generic settings for any genetic algorithms.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(
@@ -57,8 +55,7 @@ pub struct Config<G: Gene> {
 }
 
 impl<G: Gene> Config<G> {
-    // todo: better name
-    pub fn mutant_count(&self) -> usize {
+    pub fn mutants_count(&self) -> usize {
         (self.population_size as f32 * self.mutation_ratio)
             .ceil()
             .max(1.0) as usize
@@ -79,7 +76,7 @@ impl<G: Gene> Default for Config<G> {
             tournament_size: 4,
             bests: 5,
             seed: Default::default(),
-            // tbd: [future, ga] find a better default, now it looks like, that 0 is the best.
+            // todo: [future, ga] find a better default, now it looks like, that 0 is the best.
             //      moving all children to one parent pool allows to use seed safely,
             //      as it won't affect other pools.
             //      need to collect all linage to see how migration happen;
@@ -112,7 +109,7 @@ mod tests {
             mutation_ratio: 0.15, // 10 * 0.15 = 1.5 → ceil = 2
             ..Default::default()
         };
-        assert_that!(cfg.mutant_count()).is_equal_to(2);
+        assert_that!(cfg.mutants_count()).is_equal_to(2);
     }
 
     /// Partial JSON overrides only specified fields; rest stay default.
