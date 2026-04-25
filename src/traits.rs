@@ -34,7 +34,7 @@ pub trait Crossover<G: Gene, GaState, IndState>: Send + Sync {
 /// Computes fitness for a genome; must be `Send + Sync` for Rayon sharing.
 pub trait Scorer<G: Gene, GaState, IndState>: Send + Sync {
     /// Return `(fitness, individual_state)` for `individual`.
-    fn score(
+    fn evaluate(
         &self,
         individual: &Individual<G, IndState>,
         ctx: &Context<'_, G, GaState, IndState>,
@@ -105,7 +105,7 @@ where
         + Send
         + Sync,
 {
-    fn score(
+    fn evaluate(
         &self,
         individual: &Individual<G, IndState>,
         ctx: &Context<'_, G, GaState, IndState>,
@@ -168,7 +168,7 @@ impl<G: Gene, GaState, IndState> Crossover<G, GaState, IndState> for NoopCrossov
 pub struct NoopScorer;
 
 impl<G: Gene, GaState, IndState> Scorer<G, GaState, IndState> for NoopScorer {
-    fn score(
+    fn evaluate(
         &self,
         _: &Individual<G, IndState>,
         _: &Context<'_, G, GaState, IndState>,

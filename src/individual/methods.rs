@@ -28,7 +28,7 @@ impl<G: Gene, IndState> Individual<G, IndState> {
         Sc: Scorer<G, GaState, IndState>,
     {
         if !self.fitness.is_finite() {
-            (self.fitness, self.state) = scorer.score(self, ctx);
+            (self.fitness, self.state) = scorer.evaluate(self, ctx);
         }
     }
 }
@@ -39,7 +39,7 @@ mod tests {
     use crate::{Config, Pools};
     use spectral::prelude::*;
 
-    fn const_score(ind: &Individual<i64, ()>, _: &Context<'_, i64, (), ()>) -> (f64, Option<()>) {
+    fn const_evaluate(ind: &Individual<i64, ()>, _: &Context<'_, i64, (), ()>) -> (f64, Option<()>) {
         (ind.genome.len() as f64, None)
     }
 
@@ -57,7 +57,7 @@ mod tests {
         let pools = Pools::<i64, ()>::default();
         let ctx = Context::<i64, (), ()> { generation: 0, diversity: 0.0, stagnation: 0.0, sigma: cfg.sigma.get(0, cfg.max_generation), config: &cfg, state: &None, pools: &pools, __: std::marker::PhantomData };
         let mut ind = Individual::<i64, ()>::firstborn(0, 0, vec![1, 2, 3]);
-        ind.evaluate(&const_score, &ctx);
+        ind.evaluate(&const_evaluate, &ctx);
         assert_that!(ind.fitness).is_equal_to(3.0);
     }
 
@@ -68,10 +68,10 @@ mod tests {
         let pools = Pools::<i64, ()>::default();
         let ctx = Context::<i64, (), ()> { generation: 0, diversity: 0.0, stagnation: 0.0, sigma: cfg.sigma.get(0, cfg.max_generation), config: &cfg, state: &None, pools: &pools, __: std::marker::PhantomData };
         let mut ind = Individual::<i64, ()>::firstborn(0, 0, vec![1, 2, 3]);
-        ind.evaluate(&const_score, &ctx);
+        ind.evaluate(&const_evaluate, &ctx);
         // Override the genome to verify score is NOT recomputed.
         ind.genome = vec![9, 9, 9, 9, 9];
-        ind.evaluate(&const_score, &ctx);
+        ind.evaluate(&const_evaluate, &ctx);
         assert_that!(ind.fitness).is_equal_to(3.0); // still original
     }
 

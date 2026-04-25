@@ -106,7 +106,6 @@ where
     pub fn run(&mut self) -> &mut Pools<G, IndState> {
         self.reset();
 
-        // todo: [future, ga] identical pools should be merged to save computation time.
         for generation in 0..=self.config.max_generation {
             let stagnation =
                 (self.stagnation_counter as f32 / self.config.stagnation_count as f32).min(1.0);
@@ -200,7 +199,7 @@ where
                         .enumerate()
                         .filter(|(_, ind)| !ind.fitness.is_finite())
                         .map(|(i, ind)| {
-                            let (fitness, s) = scorer.score(ind, &ctx);
+                            let (fitness, s) = scorer.evaluate(ind, &ctx);
                             (i, fitness, s)
                         })
                         .collect::<Vec<_>>()
