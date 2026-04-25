@@ -1,4 +1,4 @@
-use super::{mutant_with_noise, noise_factor};
+use super::noisy_mutant;
 use darwin::{Context, Crossover, Gene, GeneRanges, Genome, GenomeRef, RangeSet, Sigma};
 use rand::RngExt;
 use std::iter;
@@ -8,17 +8,17 @@ use std::ops::Add;
 pub struct DefaultCrossover<G> {
     genome: GeneRanges<G>,
     groups: Vec<usize>,
-    config: Sigma,
+    sigma_cfg: Sigma,
 }
 
 impl<G: Gene + Add<Output = G> + TryFrom<i64>> DefaultCrossover<G> {
     /// `range_set` — one `GeneRanges` per group; groups and flat ranges are derived from it.
-    pub fn new(range_set: &RangeSet<G>, config: Sigma) -> Self {
+    pub fn new(range_set: &RangeSet<G>, sigma_cfg: Sigma) -> Self {
         assert!(!range_set.is_empty());
         Self {
             groups: range_set.iter().map(|r| r.len()).collect(),
             genome: range_set.iter().flatten().copied().collect(),
-            config,
+            sigma_cfg,
         }
     }
 }
@@ -63,9 +63,7 @@ where
                 child.extend_from_slice(src);
             });
 
-        let sigma = self.config.get(ctx.generation, ctx.config.max_generation);
-        let noise = noise_factor(ctx.diversity, ctx.stagnation);
-        mutant_with_noise(&self.genome, sigma, &child, noise, &mut rng)
+        noisy_mutant(&self.genome, &self.sigma_cfg, &child, ctx, &mut rng)
             .into_iter()
             .chain(iter::once(child))
             .collect()
@@ -106,7 +104,7 @@ mod tests {
         let children = crossover.cross(
             &dad,
             &mom,
-            // diversity=1.0, stagnation=0.0 → noise_factor=0.0 → no mutation; pure child is last
+            // diversity=1.0, stagnation=0.0 → noise=0.0 → no mutation; pure child is last
             &ctx,
         );
         let child = &children[children.len() - 1];

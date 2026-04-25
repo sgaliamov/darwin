@@ -1,7 +1,7 @@
+use super::noisy_mutant;
 use darwin::{Context, Gene, GeneRanges, GeneRangesRef, Genome, GenomeRef, Mutator, Sigma};
 use rand::distr::uniform::SampleUniform;
 use std::ops::Add;
-use super::{noise_factor, mutant_with_noise};
 
 /// Produces mutated genome copies via Gaussian noise.
 pub struct DefaultMutator<G> {
@@ -25,10 +25,12 @@ where
 {
     /// Return a *mutated copy* of the given genome.
     /// Mutants that fall outside the allowed range are discarded (returns `None`).
-    fn mutant(&self, genome: GenomeRef<G>, ctx: &Context<'_, G, GaState, IndState>) -> Option<Genome<G>> {
-        let sigma = self.config.get(ctx.generation, ctx.config.max_generation);
-        let noise = noise_factor(ctx.diversity, ctx.stagnation);
-        mutant_with_noise(&self.ranges, sigma, genome, noise, &mut rand::rng())
+    fn mutant(
+        &self,
+        genome: GenomeRef<G>,
+        ctx: &Context<'_, G, GaState, IndState>,
+    ) -> Option<Genome<G>> {
+        noisy_mutant(&self.ranges, &self.config, genome, ctx, &mut rand::rng())
     }
 }
 
@@ -43,7 +45,7 @@ mod tests {
     fn mutant_with_zero_noise_returns_same_genome() {
         let mutator = DefaultMutator::new(&[(0i64, 1_000_000)], Sigma::default());
         let genome = vec![500_000i64];
-        // diversity=1, stagnation=0 → noise_factor=0 → shift is ~0 almost always
+        // diversity=1, stagnation=0 → noise=0 → shift is ~0 almost always
         let ga_cfg = Config::default();
         let pools = darwin::Pools::<i64, ()>::from_vec(vec![]);
         let ctx = Context {
@@ -58,10 +60,10 @@ mod tests {
         };
         let mut same = 0usize;
         for _ in 0..100 {
-            if let Some(m) = mutator.mutant(&genome, &ctx) {
-                if m == genome {
-                    same += 1;
-                }
+            if let Some(m) = mutator.mutant(&genome, &ctx)
+                && m == genome
+            {
+                same += 1;
             }
         }
         assert_that!(same).is_greater_than(80);

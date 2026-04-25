@@ -1,7 +1,7 @@
 mod crossover;
 mod generator;
 mod mutator;
-use darwin::{Gene, GeneRangesRef, Genome, GenomeRef};
+use darwin::{Context, Gene, GeneRangesRef, Genome, GenomeRef, Sigma};
 pub use crossover::*;
 pub use generator::*;
 pub use mutator::*;
@@ -15,18 +15,21 @@ pub fn noise_factor(diversity: f32, stagnation: f32) -> f32 {
     base + stagnation * (1.0 - base)
 }
 
-/// Applies Gaussian noise to `genome`.
+/// Applies Gaussian noise to `genome` using sigma and noise derived from `ctx`.
 /// Returns `None` if any mutated gene falls outside its declared range.
-fn mutant_with_noise<G>(
+pub(super) fn noisy_mutant<G, GaState, IndState>(
     ranges: GeneRangesRef<G>,
-    sigma: f32,
+    sigma_cfg: &Sigma,
     genome: GenomeRef<G>,
-    noise: f32,
+    ctx: &Context<'_, G, GaState, IndState>,
     rng: &mut impl rand::Rng,
 ) -> Option<Genome<G>>
 where
     G: Gene + Add<Output = G> + TryFrom<i64>,
+    GaState: Sync,
 {
+    let sigma = sigma_cfg.get(ctx.generation, ctx.config.max_generation);
+    let noise = noise_factor(ctx.diversity, ctx.stagnation);
     // μ = 0 so shifts are symmetric around the original value.
     let normal = Normal::new(0.0_f32, sigma).expect("`sigma` should be valid.");
 
