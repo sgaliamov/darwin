@@ -2,7 +2,7 @@ mod crossover;
 mod generator;
 mod mutator;
 pub use crossover::*;
-use darwin::{Context, Gene, GeneRangesRef, Genome, GenomeRef, Sigma};
+use darwin::{Context, Gene, GeneRangesRef, Genome, GenomeRef};
 pub use generator::*;
 pub use mutator::*;
 use rand_distr::{Distribution, Normal};
@@ -19,7 +19,6 @@ pub fn noise_factor(diversity: f32, stagnation: f32) -> f32 {
 /// Returns `None` if any mutated gene falls outside its declared range.
 fn noisy_mutant<G, GaState, IndState>(
     flat_ranges: GeneRangesRef<G>,
-    sigma_cfg: &Sigma,
     flat_genome: GenomeRef<G>,
     ctx: &Context<'_, G, GaState, IndState>,
     rng: &mut impl rand::Rng,
@@ -28,7 +27,7 @@ where
     G: Gene + Add<Output = G> + TryFrom<i64>,
     GaState: Sync,
 {
-    let sigma = sigma_cfg.get(ctx.generation, ctx.config.max_generation);
+    let sigma = ctx.sigma;
     let noise = noise_factor(ctx.diversity, ctx.stagnation);
     // μ = 0 so shifts are symmetric around the original value.
     let normal = Normal::new(0.0_f32, sigma).expect("`sigma` should be valid.");

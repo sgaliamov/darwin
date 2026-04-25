@@ -3,7 +3,7 @@ mod sample;
 #[cfg(test)]
 mod tests {
     use super::sample;
-    use darwin::{Config, Context, GeneticAlgorithm, Individual, NoopCallback, Sigma};
+    use darwin::{Config, Context, GeneticAlgorithm, Individual, NoopCallback};
     use sample::{DefaultCrossover, DefaultGenerator, DefaultMutator};
     use itertools::Itertools;
     use spectral::prelude::*;
@@ -102,10 +102,9 @@ mod tests {
         };
 
         let ranges: Vec<_> = config.ranges.iter().flatten().cloned().collect();
-        let evo_config = Sigma { max: 1.0, min: 0.5 };
         let generator = DefaultGenerator::new(&ranges);
-        let mutator = DefaultMutator::new(&ranges, evo_config.clone());
-        let crossover = DefaultCrossover::new(&config.ranges, evo_config);
+        let mutator = DefaultMutator::new(&ranges);
+        let crossover = DefaultCrossover::new(&config.ranges);
         let mut ga = GeneticAlgorithm::<i64, (), (), _, _, _, _, _>::new(
             &config, generator, mutator, crossover,
             |ind: &Individual<i64, ()>, _: &Context<'_, i64, (), ()>| (-(ind.genome[0] as f64).powi(2), None),
@@ -132,10 +131,9 @@ mod tests {
         };
 
         let ranges: Vec<_> = config.ranges.iter().flatten().cloned().collect();
-        let evo_config = Sigma { max: 2.0, min: 1.0 };
         let generator = DefaultGenerator::new(&ranges);
-        let mutator = DefaultMutator::new(&ranges, evo_config.clone());
-        let crossover = DefaultCrossover::new(&config.ranges, evo_config);
+        let mutator = DefaultMutator::new(&ranges);
+        let crossover = DefaultCrossover::new(&config.ranges);
         let mut ga = GeneticAlgorithm::<i64, (), (), _, _, _, _, _>::new(
             &config, generator, mutator, crossover,
             |ind: &Individual<i64, ()>, _: &Context<'_, i64, (), ()>| (-(ind.genome[0] as f64).powi(2), None),
@@ -160,10 +158,9 @@ mod tests {
         };
 
         let ranges: Vec<_> = config.ranges.iter().flatten().cloned().collect();
-        let evo_config = Sigma { max: 2.0, min: 1.0 };
         let generator = DefaultGenerator::new(&ranges);
-        let mutator = DefaultMutator::new(&ranges, evo_config.clone());
-        let crossover = DefaultCrossover::new(&config.ranges, evo_config);
+        let mutator = DefaultMutator::new(&ranges);
+        let crossover = DefaultCrossover::new(&config.ranges);
         let mut ga = GeneticAlgorithm::<i64, (), (), _, _, _, _, _>::new(
             &config, generator, mutator, crossover, sphere_no_state, NoopCallback,
         );
@@ -208,10 +205,9 @@ mod tests {
 
     fn test_run(config: Config<i64>, writer: BufWriter<&mut Vec<u8>>) -> bool {
         let ranges: Vec<(i64, i64)> = config.ranges.iter().flatten().cloned().collect();
-        let evo_config = Sigma { max: 2.0, min: 1.0 };
         let generator = DefaultGenerator::new(&ranges);
-        let mutator = DefaultMutator::new(&ranges, evo_config.clone());
-        let crossover = DefaultCrossover::new(&config.ranges, evo_config);
+        let mutator = DefaultMutator::new(&ranges);
+        let crossover = DefaultCrossover::new(&config.ranges);
         let mut ga = GeneticAlgorithm::new(&config, generator, mutator, crossover, sphere, callback_fn);
         ga.set_state((&config, Mutex::new(writer)));
         let pools = ga.run();

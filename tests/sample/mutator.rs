@@ -1,19 +1,17 @@
 use super::noisy_mutant;
-use darwin::{Context, Gene, GeneRanges, GeneRangesRef, Genome, Individual, Mutator, Sigma};
+use darwin::{Context, Gene, GeneRanges, GeneRangesRef, Genome, Individual, Mutator};
 use rand::distr::uniform::SampleUniform;
 use std::ops::Add;
 
 /// Produces mutated genome copies via Gaussian noise.
 pub struct DefaultMutator<G> {
     ranges: GeneRanges<G>,
-    config: Sigma,
 }
 
 impl<G: Gene + SampleUniform + Add<Output = G> + TryFrom<i64>> DefaultMutator<G> {
-    pub fn new(ranges: GeneRangesRef<G>, config: Sigma) -> Self {
+    pub fn new(ranges: GeneRangesRef<G>) -> Self {
         Self {
             ranges: ranges.to_vec(),
-            config,
         }
     }
 }
@@ -30,20 +28,20 @@ where
         individual: &Individual<G, IndState>,
         ctx: &Context<'_, G, GaState, IndState>,
     ) -> Option<Genome<G>> {
-        noisy_mutant(&self.ranges, &self.config, &individual.genome, ctx, &mut rand::rng())
+        noisy_mutant(&self.ranges, &individual.genome, ctx, &mut rand::rng())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use darwin::{Config, Context, Individual, Sigma};
+    use darwin::{Config, Context, Individual};
     use spectral::prelude::*;
 
     /// `mutant` with low sigma and high diversity (noise≈0) almost always returns the same genome.
     #[test]
     fn mutant_with_zero_noise_returns_same_genome() {
-        let mutator = DefaultMutator::new(&[(0i64, 1_000_000)], Sigma::default());
+        let mutator = DefaultMutator::new(&[(0i64, 1_000_000)]);
         let genome = vec![500_000i64];
         // diversity=1, stagnation=0 → noise=0 → shift is ~0 almost always
         let ga_cfg = Config::default();
@@ -75,10 +73,6 @@ mod tests {
     fn mutant_never_exceeds_range() {
         let mutator = DefaultMutator::new(
             &[(0i64, 10)],
-            Sigma {
-                max: 1000.0,
-                min: 500.0,
-            },
         );
         let genome = vec![5i64];
         let ga_cfg = Config::<i64> {
@@ -90,7 +84,7 @@ mod tests {
             generation: 0,
             diversity: 0.0,
             stagnation: 0.0,
-            sigma: ga_cfg.sigma.get(0, ga_cfg.max_generation),
+            sigma: 1000.0,
             config: &ga_cfg,
             state: &None::<()>,
             pools: &pools,
