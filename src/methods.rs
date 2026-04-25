@@ -4,6 +4,7 @@
 };
 use itertools::Itertools;
 use rand::prelude::*;
+use rand_distr::Normal;
 use rayon::prelude::*;
 
 impl<'a, G, GaState, IndState, Gen, M, C, Sc, Cb>
@@ -115,10 +116,12 @@ where
                 .sigma
                 .get(generation, self.config.max_generation);
 
-            self.mutate(generation, stagnation, sigma);
-            self.recombine(generation, stagnation, sigma);
-            self.random(generation, stagnation, sigma);
-            self.evaluate_generation(generation, stagnation, sigma);
+            let normal = Normal::new(0.0_f32, sigma).expect("`sigma` must be positive");
+
+            self.mutate(generation, stagnation, normal);
+            self.recombine(generation, stagnation, normal);
+            self.random(generation, stagnation, normal);
+            self.evaluate_generation(generation, stagnation, normal);
 
             let improved = self
                 .pools
@@ -136,7 +139,7 @@ where
                 generation,
                 diversity,
                 stagnation,
-                sigma,
+                normal,
                 config: self.config,
                 state: &self.state,
                 pools: &self.pools,
@@ -167,7 +170,7 @@ where
     /// Evaluate all individuals (parallel) and sort each pool descending by
     /// fitness. Truncate back to `population_size` in case parents + offspring
     /// exceeded the limit.
-    fn evaluate_generation(&mut self, generation: usize, stagnation: f32, sigma: f32) {
+    fn evaluate_generation(&mut self, generation: usize, stagnation: f32, normal: Normal<f32>) {
         let config = self.config;
         let flat_genome = &self.flat_genome;
         let population_size = config.population_size;
@@ -188,7 +191,7 @@ where
                         generation,
                         diversity: pool.diversity(),
                         stagnation,
-                        sigma,
+                        normal,
                         config,
                         state,
                         pools,
@@ -227,7 +230,7 @@ where
     }
 
     /// Spawn elite mutants inside every pool.
-    fn mutate(&mut self, generation: usize, stagnation: f32, sigma: f32) {
+    fn mutate(&mut self, generation: usize, stagnation: f32, normal: Normal<f32>) {
         // Calculate stagnation boost: ratio grows as we get stuck
         let evolver = &self.mutator;
         let mutant_count = self.mutant_count;
@@ -246,7 +249,7 @@ where
                     generation,
                     diversity: pool.diversity(),
                     stagnation,
-                    sigma,
+                    normal,
                     config,
                     state,
                     pools,
@@ -274,7 +277,7 @@ where
 
     /// Recombine pools into offspring, possibly mutate, then migrate them.
     /// Short story: pair pools, breed `crossover_size` times, push kids to a chosen pool.
-    fn recombine(&mut self, generation: usize, stagnation: f32, sigma: f32) {
+    fn recombine(&mut self, generation: usize, stagnation: f32, normal: Normal<f32>) {
         let Self {
             pools,
             crossover_size,
@@ -321,14 +324,22 @@ where
                                 generation,
                                 diversity,
                                 stagnation,
-                                sigma,
+                                normal,
                                 config,
                                 state,
                                 pools: &*pools,
                                 __: std::marker::PhantomData,
                             },
                         ) {
-                            kids.push(Individual::new(g, Lineage::Child(ia, generation, dad.lineage.generation(), mom.lineage.generation())));
+                            kids.push(Individual::new(
+                                g,
+                                Lineage::Child(
+                                    ia,
+                                    generation,
+                                    dad.lineage.generation(),
+                                    mom.lineage.generation(),
+                                ),
+                            ));
                         }
                     }
 
@@ -353,7 +364,7 @@ where
 
     /// Restore populations size to the original with random immigrants.
     /// May overpopulate.
-    fn random(&mut self, generation: usize, stagnation: f32, sigma: f32) {
+    fn random(&mut self, generation: usize, stagnation: f32, normal: Normal<f32>) {
         let quota = self.immigrant_count;
         // have to make the first generation bigger, as many individuals are not valid.
         // ideally generation method should be delegated to a client and he could ensure,
@@ -381,7 +392,7 @@ where
                     generation,
                     diversity: pool.diversity(),
                     stagnation,
-                    sigma,
+                    normal,
                     config,
                     state,
                     pools,

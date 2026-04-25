@@ -1,10 +1,11 @@
 use crate::{Gene, Pools};
+use rand_distr::Normal;
 use std::marker::PhantomData;
 
 /// Context passed to all GA operators on each call.
 /// Carries GA-level signals an operator may use to tune its behavior.
 /// All pressure values are normalized to `[0.0, 1.0]`.
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct Context<'a, G: Gene, GaState, IndState> {
     /// Current generation number.
     pub generation: usize,
@@ -15,8 +16,8 @@ pub struct Context<'a, G: Gene, GaState, IndState> {
     /// Stagnation pressure: `0.0` = still improving, `1.0` = fully stagnated.
     pub stagnation: f32,
 
-    /// Annealed sigma for this generation; computed from `config.sigma`.
-    pub sigma: f32,
+    /// Gaussian N(0, σ) for this generation; built once, reused by all operators.
+    pub normal: Normal<f32>,
 
     /// GA configuration; gives operators access to e.g. `max_generation`.
     pub config: &'a crate::Config<G>,
@@ -29,12 +30,4 @@ pub struct Context<'a, G: Gene, GaState, IndState> {
     pub pools: &'a Pools<G, IndState>,
 
     pub __: PhantomData<IndState>,
-}
-
-impl<G: Gene, GaState, IndState> Copy for Context<'_, G, GaState, IndState> {}
-
-impl<G: Gene, GaState, IndState> Clone for Context<'_, G, GaState, IndState> {
-    fn clone(&self) -> Self {
-        *self
-    }
 }

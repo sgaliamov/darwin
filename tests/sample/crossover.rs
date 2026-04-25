@@ -85,11 +85,12 @@ mod tests {
 
         let ga_cfg = Config::default();
         let pools = Pools::from_vec(vec![]);
+        let sigma = ga_cfg.sigma.get(0, ga_cfg.max_generation);
         let ctx = Context::<i64, (), ()> {
             generation: 0,
             diversity: 1.0,
             stagnation: 0.0,
-            sigma: ga_cfg.sigma.get(0, ga_cfg.max_generation),
+            normal: rand_distr::Normal::new(0.0_f32, sigma).unwrap(),
             config: &ga_cfg,
             state: &None::<()>,
             pools: &pools,

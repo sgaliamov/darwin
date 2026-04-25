@@ -46,11 +46,12 @@ mod tests {
         // diversity=1, stagnation=0 → noise=0 → shift is ~0 almost always
         let ga_cfg = Config::default();
         let pools = darwin::Pools::<i64, ()>::from_vec(vec![]);
+        let sigma = ga_cfg.sigma.get(0, ga_cfg.max_generation);
         let ctx = Context {
             generation: 0,
             diversity: 1.0,
             stagnation: 0.0,
-            sigma: ga_cfg.sigma.get(0, ga_cfg.max_generation),
+            normal: rand_distr::Normal::new(0.0_f32, sigma).unwrap(),
             config: &ga_cfg,
             state: &None::<()>,
             pools: &pools,
@@ -84,7 +85,7 @@ mod tests {
             generation: 0,
             diversity: 0.0,
             stagnation: 0.0,
-            sigma: 1000.0,
+            normal: rand_distr::Normal::new(0.0_f32, 1000.0_f32).unwrap(),
             config: &ga_cfg,
             state: &None::<()>,
             pools: &pools,

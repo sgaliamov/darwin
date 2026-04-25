@@ -5,7 +5,7 @@ pub use crossover::*;
 use darwin::{Context, Gene, GeneRangesRef, Genome, GenomeRef};
 pub use generator::*;
 pub use mutator::*;
-use rand_distr::{Distribution, Normal};
+use rand_distr::Distribution;
 use std::ops::Add;
 
 /// Noise scaling factor derived from GA pressure signals.
@@ -27,10 +27,7 @@ where
     G: Gene + Add<Output = G> + TryFrom<i64>,
     GaState: Sync,
 {
-    let sigma = ctx.sigma;
     let noise = noise_factor(ctx.diversity, ctx.stagnation);
-    // μ = 0 so shifts are symmetric around the original value.
-    let normal = Normal::new(0.0_f32, sigma).expect("`sigma` should be valid.");
 
     flat_genome
         .iter()
@@ -42,7 +39,7 @@ where
                 return Some(*g);
             }
 
-            let shift_i64 = (normal.sample(rng) * noise).round() as i64;
+            let shift_i64 = (ctx.normal.sample(rng) * noise).round() as i64;
 
             // Attempts to convert `shift_i64` into the generic type `G`.
             // The conversion may fail if the value of `shift_i64` is out of range
