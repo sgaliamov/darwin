@@ -65,7 +65,7 @@ where
                 let pool_idx = i % pools.len();
                 pools[pool_idx]
                     .individuals
-                    .push(Individual::firstborn(0, genome));
+                    .push(Individual::firstborn(pool_idx, 0, genome));
             }
 
             // Recalculate diversity for all seeded pools
@@ -260,7 +260,7 @@ where
                             .map(|genome| (genome, parent.lineage.generation()))
                     })
                     .map(|(genome, parent)| {
-                        Individual::new(genome, Lineage::Mutant(generation, parent))
+                        Individual::new(genome, Lineage::Mutant(idx, generation, parent))
                     })
                     .collect_vec();
                 (idx, new_mutants)
@@ -330,7 +330,7 @@ where
                                 __: std::marker::PhantomData,
                             },
                         ) {
-                            kids.push(Individual::new(g, Lineage::Child(generation, ga, gb)));
+                            kids.push(Individual::new(g, Lineage::Child(ia, generation, ga, gb)));
                         }
                     }
 
@@ -391,7 +391,7 @@ where
                 };
 
                 let new_individuals = std::iter::repeat_with(|| {
-                    Individual::firstborn(generation, evolver.generate(&ctx))
+                    Individual::firstborn(idx, generation, evolver.generate(&ctx))
                 })
                 .take(count)
                 .collect::<Vec<_>>();

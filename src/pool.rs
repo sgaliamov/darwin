@@ -135,7 +135,7 @@ mod tests {
         let ranges = &[(0, 1_000); 100];
 
         let individuals = (0..100)
-            .map(|_| Individual::<_, ()>::firstborn(0, random_genome(ranges)))
+            .map(|_| Individual::<_, ()>::firstborn(0, 0, random_genome(ranges)))
             .collect_vec();
 
         let mut pool = Pool::new(0, individuals);
@@ -155,7 +155,7 @@ mod tests {
             .collect_vec();
 
         let individuals = (0..10)
-            .map(|_| Individual::firstborn(0, genome.clone()))
+            .map(|_| Individual::firstborn(0, 0, genome.clone()))
             .collect_vec();
         let mut pool = Pool::<_, ()>::new(0, individuals);
 
@@ -185,7 +185,7 @@ mod tests {
             let individuals = genes
                 .iter()
                 .cloned()
-                .map(|genome| Individual::<_, ()>::firstborn(0, genome))
+                .map(|genome| Individual::<_, ()>::firstborn(0, 0, genome))
                 .collect();
 
             let mut pool = Pool::new(0, individuals);
@@ -212,7 +212,7 @@ mod tests {
             let individuals = genes
                 .iter()
                 .cloned()
-                .map(|genome| Individual::<_, ()>::firstborn(0, genome))
+                .map(|genome| Individual::<_, ()>::firstborn(0, 0, genome))
                 .collect();
 
             let mut pool = Pool::new(0, individuals);
@@ -228,9 +228,9 @@ mod tests {
         // All genes are constant
         let ranges = &[(1000, 1000), (500, 500), (42, 42)];
         let individuals = vec![
-            Individual::<_, ()>::firstborn(0, vec![1000i64, 500, 42]),
-            Individual::<_, ()>::firstborn(0, vec![1000i64, 500, 42]),
-            Individual::<_, ()>::firstborn(0, vec![1000i64, 500, 42]),
+            Individual::<_, ()>::firstborn(0, 0, vec![1000i64, 500, 42]),
+            Individual::<_, ()>::firstborn(0, 0, vec![1000i64, 500, 42]),
+            Individual::<_, ()>::firstborn(0, 0, vec![1000i64, 500, 42]),
         ];
 
         let mut pool = Pool::new(0, individuals);
@@ -244,8 +244,8 @@ mod tests {
 
     fn test_remove_duplicates() {
         let ranges = &[(0, 1_000); 10];
-        let i1 = Individual::firstborn(0, random_genome(ranges));
-        let i2 = Individual::firstborn(0, random_genome(ranges));
+        let i1 = Individual::firstborn(0, 0, random_genome(ranges));
+        let i2 = Individual::firstborn(0, 0, random_genome(ranges));
         let i3 = Individual::new(i2.genome.clone(), i2.lineage.clone());
 
         let mut pool = Pool::<_, ()>::new(0, vec![i1, i2, i3]);
@@ -257,7 +257,7 @@ mod tests {
     #[test]
     fn test_deduplication_keeps_with_fitness() {
         let ranges = &[(0, 1_000); 10];
-        let i1 = Individual::firstborn(0, random_genome(ranges));
+        let i1 = Individual::firstborn(0, 0, random_genome(ranges));
         let mut i2 = Individual::<_, ()>::new(i1.genome.clone(), i1.lineage.clone());
         i2.fitness = 1.0;
         let mut pool = Pool::new(0, vec![i1, i2]);

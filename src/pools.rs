@@ -116,7 +116,7 @@ mod tests {
                 let individuals = fitnesses
                     .iter()
                     .map(|&f| {
-                        let mut ind = Individual::<(), ()>::firstborn(0, vec![]);
+                        let mut ind = Individual::<(), ()>::firstborn(i, 0, vec![]);
                         ind.fitness = f;
                         ind
                     })

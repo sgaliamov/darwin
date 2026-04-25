@@ -16,9 +16,9 @@ impl<G, IndState> Default for Individual<G, IndState> {
 impl std::fmt::Display for Lineage {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Lineage::Firstborn(g) => write!(f, "{g:02}f"),
-            Lineage::Mutant(g, p) => write!(f, "{g:02}m{p}"),
-            Lineage::Child(g, d, m) => write!(f, "{g:02}c{d}{m}"),
+            Lineage::Firstborn(p, g) => write!(f, "p{p}g{g:02}f"),
+            Lineage::Mutant(p, g, par) => write!(f, "p{p}g{g:02}m{par}"),
+            Lineage::Child(p, g, d, m) => write!(f, "p{p}g{g:02}c{d}{m}"),
         }
     }
 }

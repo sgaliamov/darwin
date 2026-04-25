@@ -16,8 +16,8 @@ impl<G, IndState> Individual<G, IndState> {
         }
     }
 
-    pub fn firstborn(generation: usize, genome: Genome<G>) -> Self {
-        Self::new(genome, Lineage::Firstborn(generation))
+    pub fn firstborn(pool: usize, generation: usize, genome: Genome<G>) -> Self {
+        Self::new(genome, Lineage::Firstborn(pool, generation))
     }
 }
 
@@ -46,7 +46,7 @@ mod tests {
     /// Freshly constructed individual has NaN fitness.
     #[test]
     fn new_individual_has_nan_fitness() {
-        let ind = Individual::<i64, ()>::firstborn(0, vec![1, 2, 3]);
+        let ind = Individual::<i64, ()>::firstborn(0, 0, vec![1, 2, 3]);
         assert_that!(ind.fitness.is_nan()).is_true();
     }
 
@@ -56,7 +56,7 @@ mod tests {
         let cfg = Config::<i64>::default();
         let pools = Pools::<i64, ()>::default();
         let ctx = Context::<i64, (), ()> { generation: 0, diversity: 0.0, stagnation: 0.0, sigma: cfg.sigma.get(0, cfg.max_generation), config: &cfg, state: &None, pools: &pools, __: std::marker::PhantomData };
-        let mut ind = Individual::<i64, ()>::firstborn(0, vec![1, 2, 3]);
+        let mut ind = Individual::<i64, ()>::firstborn(0, 0, vec![1, 2, 3]);
         ind.evaluate(&const_score, &ctx);
         assert_that!(ind.fitness).is_equal_to(3.0);
     }
@@ -67,7 +67,7 @@ mod tests {
         let cfg = Config::<i64>::default();
         let pools = Pools::<i64, ()>::default();
         let ctx = Context::<i64, (), ()> { generation: 0, diversity: 0.0, stagnation: 0.0, sigma: cfg.sigma.get(0, cfg.max_generation), config: &cfg, state: &None, pools: &pools, __: std::marker::PhantomData };
-        let mut ind = Individual::<i64, ()>::firstborn(0, vec![1, 2, 3]);
+        let mut ind = Individual::<i64, ()>::firstborn(0, 0, vec![1, 2, 3]);
         ind.evaluate(&const_score, &ctx);
         // Override the genome to verify score is NOT recomputed.
         ind.genome = vec![9, 9, 9, 9, 9];
@@ -78,7 +78,7 @@ mod tests {
     /// `firstborn` wraps genome in Firstborn lineage at given generation.
     #[test]
     fn firstborn_lineage_matches_generation() {
-        let ind = Individual::<i64, ()>::firstborn(5, vec![0]);
-        assert!(matches!(ind.lineage, Lineage::Firstborn(5)));
+        let ind = Individual::<i64, ()>::firstborn(0, 5, vec![0]);
+        assert!(matches!(ind.lineage, Lineage::Firstborn(_, 5)));
     }
 }
