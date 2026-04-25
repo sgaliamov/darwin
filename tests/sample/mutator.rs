@@ -35,7 +35,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use darwin::{Config, Context, Individual};
+    use darwin::{Context, Individual};
     use spectral::prelude::*;
 
     /// `mutant` with tiny sigma and zero stagnation almost always returns the same genome.
@@ -44,11 +44,9 @@ mod tests {
         let mutator = DefaultMutator::new(&[(0i64, 1_000_000)]);
         let genome = vec![500_000i64];
         // sigma=0.01 → shift rounds to 0 for integers almost always
-        let ga_cfg = Config::default();
         let pools = darwin::Pools::<i64, ()>::from_vec(vec![]);
         let ctx = Context {
             epoch: darwin::Epoch { generation: 0, stagnation: 0.0, normal: rand_distr::Normal::new(0.0_f32, 0.01).unwrap() },
-            config: &ga_cfg,
             state: &None::<()>,
             pools: &pools,
             __: std::marker::PhantomData,
@@ -72,14 +70,9 @@ mod tests {
             &[(0i64, 10)],
         );
         let genome = vec![5i64];
-        let ga_cfg = Config::<i64> {
-            max_generation: 100,
-            ..Config::default()
-        };
         let pools = darwin::Pools::<i64, ()>::from_vec(vec![]);
         let ctx = Context {
             epoch: darwin::Epoch { generation: 0, stagnation: 0.0, normal: rand_distr::Normal::new(0.0_f32, 1000.0_f32).unwrap() },
-            config: &ga_cfg,
             state: &None::<()>,
             pools: &pools,
             __: std::marker::PhantomData,

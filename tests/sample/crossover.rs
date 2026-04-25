@@ -73,7 +73,7 @@ where
 mod tests {
     use super::*;
     use super::super::DefaultGenerator;
-    use darwin::{Config, Context, Generator, Individual, Pools};
+    use darwin::{Context, Generator, Individual, Pools};
     use std::marker::PhantomData;
 
     #[test]
@@ -84,14 +84,9 @@ mod tests {
         let generator = DefaultGenerator::new(&ranges);
         let crossover = DefaultCrossover::new(&range_set);
 
-        let ga_cfg = Config::default();
         let pools = Pools::from_vec(vec![]);
-        let sigma = ga_cfg.sigma.get(0, ga_cfg.max_generation);
         let ctx = Context::<i64, (), ()> {
-            epoch: rand_distr::Normal::new(0.0_f32, sigma)
-                .map(|normal| darwin::Epoch { generation: 0, stagnation: 0.0, normal })
-                .unwrap(),
-            config: &ga_cfg,
+            epoch: darwin::Epoch { generation: 0, stagnation: 0.0, normal: rand_distr::Normal::new(0.0_f32, 1.0_f32).unwrap() },
             state: &None::<()>,
             pools: &pools,
             __: PhantomData,

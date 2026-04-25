@@ -139,7 +139,6 @@ where
 
             let ctx = Context::<G, GaState, IndState> {
                 epoch,
-                config: self.config,
                 state: &self.state,
                 pools: &self.pools,
                 __: std::marker::PhantomData,
@@ -189,7 +188,6 @@ where
                 .map(|pool| {
                     let ctx = Context::<G, GaState, IndState> {
                         epoch,
-                        config,
                         state,
                         pools,
                         __: std::marker::PhantomData,
@@ -230,7 +228,6 @@ where
     fn mutate(&mut self, epoch: Epoch) {
         let evolver = &self.mutator;
         let mutant_count = self.mutant_count;
-        let config = self.config;
         let state = &self.state;
         let pools = &self.pools;
         let Epoch { generation, .. } = epoch;
@@ -244,7 +241,6 @@ where
                 let m = mutant_count.min(pool.individuals.len());
                 let ctx = Context::<G, GaState, IndState> {
                     epoch,
-                    config,
                     state,
                     pools,
                     __: std::marker::PhantomData,
@@ -316,7 +312,6 @@ where
                             mom,
                             &Context::<G, GaState, IndState> {
                                 epoch,
-                                config,
                                 state,
                                 pools: &*pools,
                                 __: std::marker::PhantomData,
@@ -368,7 +363,6 @@ where
         };
 
         let evolver = &self.generator;
-        let config = self.config;
         let state = &self.state;
         let pools = &self.pools;
 
@@ -382,7 +376,6 @@ where
                 let count = quota.max(deficit);
                 let ctx = Context::<G, GaState, IndState> {
                     epoch,
-                    config,
                     state,
                     pools,
                     __: std::marker::PhantomData,

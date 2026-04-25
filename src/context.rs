@@ -8,9 +8,6 @@ pub struct Context<'a, G: Gene, GaState, IndState> {
     /// Per-generation epoch: generation index, stagnation pressure, and Gaussian N(0,σ).
     pub epoch: Epoch,
 
-    /// GA configuration; gives operators access to e.g. `max_generation`.
-    pub config: &'a crate::Config<G>,
-
     /// External GA state shared with all operators.
     pub state: &'a Option<GaState>,
 
