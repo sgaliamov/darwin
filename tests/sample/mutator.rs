@@ -28,7 +28,7 @@ where
         individual: &Individual<G, IndState>,
         ctx: &Context<'_, G, GaState, IndState>,
     ) -> Option<Genome<G>> {
-        noisy_mutant(&self.ranges, &individual.genome, ctx, &mut rand::rng())
+        noisy_mutant(&self.ranges, individual, ctx, &mut rand::rng())
     }
 }
 
@@ -38,20 +38,18 @@ mod tests {
     use darwin::{Config, Context, Individual};
     use spectral::prelude::*;
 
-    /// `mutant` with low sigma and high diversity (noise≈0) almost always returns the same genome.
+    /// `mutant` with tiny sigma and zero stagnation almost always returns the same genome.
     #[test]
     fn mutant_with_zero_noise_returns_same_genome() {
         let mutator = DefaultMutator::new(&[(0i64, 1_000_000)]);
         let genome = vec![500_000i64];
-        // diversity=1, stagnation=0 → noise=0 → shift is ~0 almost always
+        // sigma=0.01 → shift rounds to 0 for integers almost always
         let ga_cfg = Config::default();
         let pools = darwin::Pools::<i64, ()>::from_vec(vec![]);
-        let sigma = ga_cfg.sigma.get(0, ga_cfg.max_generation);
         let ctx = Context {
             generation: 0,
-            diversity: 1.0,
             stagnation: 0.0,
-            normal: rand_distr::Normal::new(0.0_f32, sigma).unwrap(),
+            normal: rand_distr::Normal::new(0.0_f32, 0.01).unwrap(),
             config: &ga_cfg,
             state: &None::<()>,
             pools: &pools,
@@ -83,7 +81,6 @@ mod tests {
         let pools = darwin::Pools::<i64, ()>::from_vec(vec![]);
         let ctx = Context {
             generation: 0,
-            diversity: 0.0,
             stagnation: 0.0,
             normal: rand_distr::Normal::new(0.0_f32, 1000.0_f32).unwrap(),
             config: &ga_cfg,

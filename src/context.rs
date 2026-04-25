@@ -10,9 +10,6 @@ pub struct Context<'a, G: Gene, GaState, IndState> {
     /// Current generation number.
     pub generation: usize,
 
-    /// Pool gene diversity: `0.0` = fully converged, `1.0` = maximally diverse.
-    pub diversity: f32,
-
     /// Stagnation pressure: `0.0` = still improving, `1.0` = fully stagnated.
     pub stagnation: f32,
 

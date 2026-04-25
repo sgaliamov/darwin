@@ -134,7 +134,6 @@ where
 
             let ctx = Context::<G, GaState, IndState> {
                 generation,
-                diversity: f64::NAN as f32, // legacy field, not used in callback
                 stagnation,
                 normal,
                 config: self.config,
@@ -187,7 +186,6 @@ where
                 .map(|pool| {
                     let ctx = Context::<G, GaState, IndState> {
                         generation,
-                        diversity: pool.diversity(),
                         stagnation,
                         normal,
                         config,
@@ -245,7 +243,6 @@ where
                 let m = mutant_count.min(pool.individuals.len());
                 let ctx = Context::<G, GaState, IndState> {
                     generation,
-                    diversity: pool.diversity(),
                     stagnation,
                     normal,
                     config,
@@ -305,7 +302,6 @@ where
 
                     // Average diversity of the two paired pools gives a fair signal
                     // without arbitrarily favouring one partner over the other.
-                    let diversity = (pa.diversity() + pb.diversity()) / 2.0;
 
                     for _ in 0..crossover_size {
                         let (Some(dad), Some(mom)) = (
@@ -320,7 +316,6 @@ where
                             mom,
                             &Context::<G, GaState, IndState> {
                                 generation,
-                                diversity,
                                 stagnation,
                                 normal,
                                 config,
@@ -388,7 +383,6 @@ where
                 let count = quota.max(deficit);
                 let ctx = Context::<G, GaState, IndState> {
                     generation,
-                    diversity: pool.diversity(),
                     stagnation,
                     normal,
                     config,
