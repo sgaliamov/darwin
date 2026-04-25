@@ -1,4 +1,4 @@
-use crate::{Gene, Genome, RangeSet};
+use crate::{Gene, Genome, RangeSet, Sigma};
 use serde::Deserialize;
 
 /// Generic settings for any genetic algorithms.
@@ -52,6 +52,9 @@ pub struct Config<G: Gene> {
     /// Defines how children are distributed between parent's pools.
     /// 0 - all goes to dad, 1 - all goes to mom.
     pub migration_factor: f64,
+
+    /// Sigma annealing schedule; shared across all operators.
+    pub sigma: Sigma,
 }
 
 impl<G: Gene> Config<G> {
@@ -81,6 +84,7 @@ impl<G: Gene> Default for Config<G> {
             //      as it won't affect other pools.
             //      need to collect all linage to see how migration happen;
             migration_factor: 0.000_000_1,
+            sigma: Sigma::default(),
         }
     }
 }

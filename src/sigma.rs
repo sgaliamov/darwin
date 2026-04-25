@@ -1,6 +1,6 @@
 /// Configuration for the built-in default evolver.
 /// Kept separate from [`crate::Config`] so GA config stays evolver-agnostic.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Deserialize)]
 pub struct Sigma {
     /// Initial standard deviation for Gaussian mutation noise.
     pub max: f32,

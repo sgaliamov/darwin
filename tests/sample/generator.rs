@@ -50,6 +50,7 @@ mod tests {
             generation: 0,
             diversity: 0.0,
             stagnation: 0.0,
+            sigma: cfg.sigma.get(0, cfg.max_generation),
             config: &cfg,
             state: &None,
             pools: &pools,

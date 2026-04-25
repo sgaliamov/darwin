@@ -25,10 +25,10 @@ pub type GenomeRef<'a, G> = &'a [G];
 /// Inclusive `[min, max]` range for one gene.
 pub type GeneRange<G> = (G, G);
 
-/// Per-gene ranges for a full genome.
+/// Coupled subgroup of genes within a genome.
 pub type GeneRanges<G> = Vec<GeneRange<G>>;
 
-/// Borrowed per-gene ranges.
+/// Borrowed subgroup.
 pub type GeneRangesRef<'a, G> = &'a [GeneRange<G>];
 
 /// Collection of genome range sets.

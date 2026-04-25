@@ -18,9 +18,9 @@ pub fn noise_factor(diversity: f32, stagnation: f32) -> f32 {
 /// Applies Gaussian noise to `genome` using sigma and noise derived from `ctx`.
 /// Returns `None` if any mutated gene falls outside its declared range.
 fn noisy_mutant<G, GaState, IndState>(
-    ranges: GeneRangesRef<G>,
+    flat_ranges: GeneRangesRef<G>,
     sigma_cfg: &Sigma,
-    genome: GenomeRef<G>,
+    flat_genome: GenomeRef<G>,
     ctx: &Context<'_, G, GaState, IndState>,
     rng: &mut impl rand::Rng,
 ) -> Option<Genome<G>>
@@ -33,11 +33,11 @@ where
     // μ = 0 so shifts are symmetric around the original value.
     let normal = Normal::new(0.0_f32, sigma).expect("`sigma` should be valid.");
 
-    genome
+    flat_genome
         .iter()
         .enumerate()
         .map(|(i, g)| {
-            let range = ranges.get(i)?;
+            let range = flat_ranges.get(i)?;
 
             if range.0 == range.1 {
                 return Some(*g);

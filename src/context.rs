@@ -15,6 +15,9 @@ pub struct Context<'a, G: Gene, GaState, IndState> {
     /// Stagnation pressure: `0.0` = still improving, `1.0` = fully stagnated.
     pub stagnation: f32,
 
+    /// Annealed sigma for this generation; computed from `config.sigma`.
+    pub sigma: f32,
+
     /// GA configuration; gives operators access to e.g. `max_generation`.
     pub config: &'a crate::Config<G>,
 

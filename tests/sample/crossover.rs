@@ -6,7 +6,7 @@ use std::ops::Add;
 
 /// Produces offspring by group-chunked crossover, with optional post-cross mutation.
 pub struct DefaultCrossover<G> {
-    genome: GeneRanges<G>,
+    flat_ranges: GeneRanges<G>,
     groups: Vec<usize>,
     sigma_cfg: Sigma,
 }
@@ -17,7 +17,7 @@ impl<G: Gene + Add<Output = G> + TryFrom<i64>> DefaultCrossover<G> {
         assert!(!range_set.is_empty());
         Self {
             groups: range_set.iter().map(|r| r.len()).collect(),
-            genome: range_set.iter().flatten().copied().collect(),
+            flat_ranges: range_set.iter().flatten().copied().collect(),
             sigma_cfg,
         }
     }
@@ -63,7 +63,7 @@ where
                 child.extend_from_slice(src);
             });
 
-        noisy_mutant(&self.genome, &self.sigma_cfg, &child, ctx, &mut rng)
+        noisy_mutant(&self.flat_ranges, &self.sigma_cfg, &child, ctx, &mut rng)
             .into_iter()
             .chain(iter::once(child))
             .collect()
@@ -92,6 +92,7 @@ mod tests {
             generation: 0,
             diversity: 1.0,
             stagnation: 0.0,
+            sigma: ga_cfg.sigma.get(0, ga_cfg.max_generation),
             config: &ga_cfg,
             state: &None::<()>,
             pools: &pools,

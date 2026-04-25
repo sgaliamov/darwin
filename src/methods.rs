@@ -108,10 +108,17 @@ where
 
         // todo: [future, ga] identical pools should be merged to save computation time.
         for generation in 0..=self.config.max_generation {
-            self.mutate(generation);
-            self.recombine(generation);
-            self.random(generation);
-            self.evaluate_generation(generation);
+            let stagnation =
+                (self.stagnation_counter as f32 / self.config.stagnation_count as f32).min(1.0);
+            let sigma = self
+                .config
+                .sigma
+                .get(generation, self.config.max_generation);
+
+            self.mutate(generation, stagnation, sigma);
+            self.recombine(generation, stagnation, sigma);
+            self.random(generation, stagnation, sigma);
+            self.evaluate_generation(generation, stagnation, sigma);
 
             let improved = self
                 .pools
@@ -122,13 +129,14 @@ where
                 self.best_fitness = self.pools.best().unwrap().1;
             }
 
-            let stagnation =
-                (self.stagnation_counter as f32 / self.config.stagnation_count as f32).min(1.0);
+            let diversity =
+                self.pools.iter().map(|p| p.diversity()).sum::<f32>() / self.pools.len() as f32;
 
             let ctx = Context::<G, GaState, IndState> {
                 generation,
-                diversity: f32::NAN, // todo: wtf?
+                diversity,
                 stagnation,
+                sigma,
                 config: self.config,
                 state: &self.state,
                 pools: &self.pools,
@@ -159,11 +167,10 @@ where
     /// Evaluate all individuals (parallel) and sort each pool descending by
     /// fitness. Truncate back to `population_size` in case parents + offspring
     /// exceeded the limit.
-    fn evaluate_generation(&mut self, generation: usize) {
+    fn evaluate_generation(&mut self, generation: usize, stagnation: f32, sigma: f32) {
         let config = self.config;
         let flat_genome = &self.flat_genome;
         let population_size = config.population_size;
-        let stagnation = (self.stagnation_counter as f32 / config.stagnation_count as f32).min(1.0);
 
         // Phase 1: remove duplicates before scoring.
         self.pools.par_iter_mut().for_each(|pool| pool.dedup());
@@ -181,6 +188,7 @@ where
                         generation,
                         diversity: pool.diversity(),
                         stagnation,
+                        sigma,
                         config,
                         state,
                         pools,
@@ -219,11 +227,8 @@ where
     }
 
     /// Spawn elite mutants inside every pool.
-    fn mutate(&mut self, generation: usize) {
+    fn mutate(&mut self, generation: usize, stagnation: f32, sigma: f32) {
         // Calculate stagnation boost: ratio grows as we get stuck
-        let stagnation =
-            (self.stagnation_counter as f32 / self.config.stagnation_count as f32).min(1.0);
-
         let evolver = &self.mutator;
         let mutant_count = self.mutant_count;
         let config = self.config;
@@ -241,6 +246,7 @@ where
                     generation,
                     diversity: pool.diversity(),
                     stagnation,
+                    sigma,
                     config,
                     state,
                     pools,
@@ -268,11 +274,7 @@ where
 
     /// Recombine pools into offspring, possibly mutate, then migrate them.
     /// Short story: pair pools, breed `crossover_size` times, push kids to a chosen pool.
-    fn recombine(&mut self, generation: usize) {
-        // todo: should use stagnation_counter directly?
-        let stagnation =
-            (self.stagnation_counter as f32 / self.config.stagnation_count as f32).min(1.0);
-
+    fn recombine(&mut self, generation: usize, stagnation: f32, sigma: f32) {
         let Self {
             pools,
             crossover_size,
@@ -321,6 +323,7 @@ where
                                 generation,
                                 diversity,
                                 stagnation,
+                                sigma,
                                 config,
                                 state,
                                 pools: &*pools,
@@ -352,7 +355,7 @@ where
 
     /// Restore populations size to the original with random immigrants.
     /// May overpopulate.
-    fn random(&mut self, generation: usize) {
+    fn random(&mut self, generation: usize, stagnation: f32, sigma: f32) {
         let quota = self.immigrant_count;
         // have to make the first generation bigger, as many individuals are not valid.
         // ideally generation method should be delegated to a client and he could ensure,
@@ -366,7 +369,6 @@ where
         let evolver = &self.generator;
         let config = self.config;
         let state = &self.state;
-        let stagnation = (self.stagnation_counter as f32 / config.stagnation_count as f32).min(1.0);
         let pools = &self.pools;
 
         let immigrants: Vec<(usize, Vec<Individual<G, IndState>>)> = self
@@ -381,6 +383,7 @@ where
                     generation,
                     diversity: pool.diversity(),
                     stagnation,
+                    sigma,
                     config,
                     state,
                     pools,
