@@ -48,11 +48,7 @@ pub trait Scorer<G: Gene, GaState, IndState>: Send + Sync {
 /// Reports progress after each generation; must be `Send + Sync` for Rayon sharing.
 pub trait Callback<G: Gene, GaState, IndState>: Send + Sync {
     /// Called once per generation with context and all pools.
-    fn call(
-        &self,
-        ctx: &Context<'_, G, GaState, IndState>,
-        pools: &Pools<G, IndState>,
-    );
+    fn call(&self, ctx: &Context<'_, G, GaState, IndState>);
 }
 
 impl<G, GaState, IndState, F> Scorer<G, GaState, IndState> for F
@@ -68,14 +64,10 @@ where
 impl<G, GaState, IndState, F> Callback<G, GaState, IndState> for F
 where
     G: Gene,
-    F: Fn(&Context<'_, G, GaState, IndState>, &Pools<G, IndState>) + Send + Sync,
+    F: Fn(&Context<'_, G, GaState, IndState>) + Send + Sync,
 {
-    fn call(
-        &self,
-        ctx: &Context<'_, G, GaState, IndState>,
-        pools: &Pools<G, IndState>,
-    ) {
-        self(ctx, pools)
+    fn call(&self, ctx: &Context<'_, G, GaState, IndState>) {
+        self(ctx)
     }
 }
 
@@ -92,12 +84,7 @@ impl<G: Gene, GaState, IndState> Scorer<G, GaState, IndState> for NoopScorer {
 pub struct NoopCallback;
 
 impl<G: Gene, GaState, IndState> Callback<G, GaState, IndState> for NoopCallback {
-    fn call(
-        &self,
-        _: &Context<'_, G, GaState, IndState>,
-        _: &Pools<G, IndState>,
-    ) {
-    }
+    fn call(&self, _: &Context<'_, G, GaState, IndState>) {}
 }
 
 /// Evolution engine with independently injectable genome operations.

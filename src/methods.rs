@@ -131,7 +131,7 @@ where
                 pools: &self.pools,
                 __: std::marker::PhantomData,
             };
-            self.callback.call(&ctx, &self.pools);
+            self.callback.call(&ctx);
 
             if self.stagnation(improved) {
                 break;

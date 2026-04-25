@@ -90,7 +90,7 @@ impl<G, IndState> Pools<G, IndState> {
 
     /// Best individual across all pools: cloned genome + fitness.
     /// Returns `None` if all pools are empty.
-    pub fn best(&self) -> Option<(Genome<G>, f64)>
+    pub fn best(&self) -> Option<(&Genome<G>, f64)>
     where
         G: Gene,
     {
@@ -98,7 +98,7 @@ impl<G, IndState> Pools<G, IndState> {
             .flat_map(|pool| pool.individuals.iter())
             .filter(|ind| ind.fitness.is_finite())
             .max_by(|a, b| a.fitness.total_cmp(&b.fitness))
-            .map(|ind| (ind.genome.clone(), ind.fitness))
+            .map(|ind| (&ind.genome, ind.fitness))
     }
 }
 

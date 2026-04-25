@@ -3,7 +3,7 @@ mod sample;
 #[cfg(test)]
 mod tests {
     use super::sample;
-    use darwin::{Config, Context, GeneticAlgorithm, GenomeRef, NoopCallback, Pools, Sigma};
+    use darwin::{Config, Context, GeneticAlgorithm, GenomeRef, NoopCallback, Sigma};
     use sample::{DefaultCrossover, DefaultGenerator, DefaultMutator};
     use itertools::Itertools;
     use spectral::prelude::*;
@@ -22,15 +22,12 @@ mod tests {
         (score, Some(()))
     }
 
-    fn callback_fn(
-        ctx: &Context<'_, i64, State<'_>, ()>,
-        pools: &Pools<i64, ()>,
-    ) {
+    fn callback_fn(ctx: &Context<'_, i64, State<'_>, ()>) {
         let (config, writer) = ctx.state.as_ref().unwrap();
         let mut writer = writer.lock().unwrap();
         let g = ctx.generation;
 
-        for pool in pools.iter() {
+        for pool in ctx.pools.iter() {
             let line = format!(
                 "{g}_{} π{:.6} total: {}\n",
                 pool.number,
