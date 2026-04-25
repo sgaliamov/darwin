@@ -3,7 +3,7 @@ mod sample;
 #[cfg(test)]
 mod tests {
     use super::sample;
-    use darwin::{Config, Context, GeneticAlgorithm, GenomeRef, NoopCallback, Sigma};
+    use darwin::{Config, Context, GeneticAlgorithm, Individual, NoopCallback, Sigma};
     use sample::{DefaultCrossover, DefaultGenerator, DefaultMutator};
     use itertools::Itertools;
     use spectral::prelude::*;
@@ -13,8 +13,8 @@ mod tests {
     type State<'a> = (&'a Config<i64>, Mutex<BufWriter<&'a mut Vec<u8>>>);
 
     /// Fitness = ∑x² → 0 at the origin.
-    fn sphere(genome: GenomeRef<i64>, _ctx: &Context<'_, i64, State, ()>) -> (f64, Option<()>) {
-        let score = -genome
+    fn sphere(ind: &Individual<i64, ()>, _ctx: &Context<'_, i64, State, ()>) -> (f64, Option<()>) {
+        let score = -ind.genome
             .iter()
             .map(|&x| x as f64 / 99.0)
             .map(|x: f64| x.powi(2))
@@ -108,7 +108,7 @@ mod tests {
         let crossover = DefaultCrossover::new(&config.ranges, evo_config);
         let mut ga = GeneticAlgorithm::<i64, (), (), _, _, _, _, _>::new(
             &config, generator, mutator, crossover,
-            |g: GenomeRef<i64>, _: &Context<'_, i64, (), ()>| (-(g[0] as f64).powi(2), None),
+            |ind: &Individual<i64, ()>, _: &Context<'_, i64, (), ()>| (-(ind.genome[0] as f64).powi(2), None),
             NoopCallback,
         );
 
@@ -138,7 +138,7 @@ mod tests {
         let crossover = DefaultCrossover::new(&config.ranges, evo_config);
         let mut ga = GeneticAlgorithm::<i64, (), (), _, _, _, _, _>::new(
             &config, generator, mutator, crossover,
-            |g: GenomeRef<i64>, _: &Context<'_, i64, (), ()>| (-(g[0] as f64).powi(2), None),
+            |ind: &Individual<i64, ()>, _: &Context<'_, i64, (), ()>| (-(ind.genome[0] as f64).powi(2), None),
             NoopCallback,
         );
 
@@ -197,8 +197,8 @@ mod tests {
         }
     }
 
-    fn sphere_no_state(genome: GenomeRef<i64>, _: &Context<'_, i64, (), ()>) -> (f64, Option<()>) {
-        let score = -genome
+    fn sphere_no_state(ind: &Individual<i64, ()>, _: &Context<'_, i64, (), ()>) -> (f64, Option<()>) {
+        let score = -ind.genome
             .iter()
             .map(|&x| x as f64 / 99.0)
             .map(|x: f64| x.powi(2))

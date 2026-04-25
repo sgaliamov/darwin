@@ -1,5 +1,5 @@
 use super::noisy_mutant;
-use darwin::{Context, Gene, GeneRanges, GeneRangesRef, Genome, GenomeRef, Mutator, Sigma};
+use darwin::{Context, Gene, GeneRanges, GeneRangesRef, Genome, Individual, Mutator, Sigma};
 use rand::distr::uniform::SampleUniform;
 use std::ops::Add;
 
@@ -23,21 +23,21 @@ where
     G: Gene + Add<Output = G> + TryFrom<i64>,
     GaState: Sync,
 {
-    /// Return a *mutated copy* of the given genome.
+    /// Return a *mutated copy* of the given individual's genome.
     /// Mutants that fall outside the allowed range are discarded (returns `None`).
     fn mutant(
         &self,
-        genome: GenomeRef<G>,
+        individual: &Individual<G, IndState>,
         ctx: &Context<'_, G, GaState, IndState>,
     ) -> Option<Genome<G>> {
-        noisy_mutant(&self.ranges, &self.config, genome, ctx, &mut rand::rng())
+        noisy_mutant(&self.ranges, &self.config, &individual.genome, ctx, &mut rand::rng())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use darwin::{Config, Context, Sigma};
+    use darwin::{Config, Context, Individual, Sigma};
     use spectral::prelude::*;
 
     /// `mutant` with low sigma and high diversity (noise≈0) almost always returns the same genome.
@@ -58,9 +58,10 @@ mod tests {
             pools: &pools,
             __: std::marker::PhantomData,
         };
+        let ind = Individual::firstborn(0, 0, genome.clone());
         let mut same = 0usize;
         for _ in 0..100 {
-            if let Some(m) = mutator.mutant(&genome, &ctx)
+            if let Some(m) = mutator.mutant(&ind, &ctx)
                 && m == genome
             {
                 same += 1;
@@ -95,9 +96,10 @@ mod tests {
             pools: &pools,
             __: std::marker::PhantomData,
         };
+        let ind = Individual::firstborn(0, 0, genome.clone());
         // mutants that land outside the range return None — verify any Some is in range
         for _ in 0..200 {
-            if let Some(m) = mutator.mutant(&genome, &ctx) {
+            if let Some(m) = mutator.mutant(&ind, &ctx) {
                 assert!(m[0] >= 0 && m[0] <= 10, "mutant {} out of range", m[0]);
             }
         }

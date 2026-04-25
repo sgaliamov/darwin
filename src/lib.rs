@@ -2,19 +2,19 @@
 mod config;
 mod context;
 mod genome;
+mod individual;
 mod methods;
 mod pool;
 mod pools;
 mod sigma;
-mod individual;
 
 pub use config::*;
 pub use context::*;
 pub use genome::*;
+pub use individual::*;
 pub use pool::*;
 pub use pools::*;
 pub use sigma::*;
-pub use individual::*;
 
 /// Generates random genomes; must be `Send + Sync` for Rayon sharing.
 pub trait Generator<G: Gene, GaState, IndState>: Send + Sync {
@@ -24,8 +24,12 @@ pub trait Generator<G: Gene, GaState, IndState>: Send + Sync {
 
 /// Produces mutated copies of a genome; must be `Send + Sync` for Rayon sharing.
 pub trait Mutator<G: Gene, GaState, IndState>: Send + Sync {
-    /// Return a mutated copy of `genome`, or `None` if the result falls outside range.
-    fn mutant(&self, genome: GenomeRef<G>, ctx: &Context<'_, G, GaState, IndState>) -> Option<Genome<G>>;
+    /// Return a mutated copy of `individual.genome`, or `None` if the result falls outside range.
+    fn mutant(
+        &self,
+        individual: &Individual<G, IndState>,
+        ctx: &Context<'_, G, GaState, IndState>,
+    ) -> Option<Genome<G>>;
 }
 
 /// Produces offspring from two parent genomes; must be `Send + Sync` for Rayon sharing.
@@ -33,16 +37,20 @@ pub trait Crossover<G: Gene, GaState, IndState>: Send + Sync {
     /// Cross `dad` and `mom`, returning one or more child genomes.
     fn cross(
         &self,
-        dad: GenomeRef<G>,
-        mom: GenomeRef<G>,
+        dad: &Individual<G, IndState>,
+        mom: &Individual<G, IndState>,
         ctx: &Context<'_, G, GaState, IndState>,
     ) -> Vec<Genome<G>>;
 }
 
 /// Computes fitness for a genome; must be `Send + Sync` for Rayon sharing.
 pub trait Scorer<G: Gene, GaState, IndState>: Send + Sync {
-    /// Return `(fitness, individual_state)` for `genome`.
-    fn score(&self, genome: GenomeRef<G>, ctx: &Context<'_, G, GaState, IndState>) -> (f64, Option<IndState>);
+    /// Return `(fitness, individual_state)` for `individual`.
+    fn score(
+        &self,
+        individual: &Individual<G, IndState>,
+        ctx: &Context<'_, G, GaState, IndState>,
+    ) -> (f64, Option<IndState>);
 }
 
 /// Reports progress after each generation; must be `Send + Sync` for Rayon sharing.
@@ -54,10 +62,16 @@ pub trait Callback<G: Gene, GaState, IndState>: Send + Sync {
 impl<G, GaState, IndState, F> Scorer<G, GaState, IndState> for F
 where
     G: Gene,
-    F: Fn(GenomeRef<G>, &Context<'_, G, GaState, IndState>) -> (f64, Option<IndState>) + Send + Sync,
+    F: Fn(&Individual<G, IndState>, &Context<'_, G, GaState, IndState>) -> (f64, Option<IndState>)
+        + Send
+        + Sync,
 {
-    fn score(&self, genome: GenomeRef<G>, ctx: &Context<'_, G, GaState, IndState>) -> (f64, Option<IndState>) {
-        self(genome, ctx)
+    fn score(
+        &self,
+        individual: &Individual<G, IndState>,
+        ctx: &Context<'_, G, GaState, IndState>,
+    ) -> (f64, Option<IndState>) {
+        self(individual, ctx)
     }
 }
 
@@ -75,7 +89,11 @@ where
 pub struct NoopScorer;
 
 impl<G: Gene, GaState, IndState> Scorer<G, GaState, IndState> for NoopScorer {
-    fn score(&self, _: GenomeRef<G>, _: &Context<'_, G, GaState, IndState>) -> (f64, Option<IndState>) {
+    fn score(
+        &self,
+        _: &Individual<G, IndState>,
+        _: &Context<'_, G, GaState, IndState>,
+    ) -> (f64, Option<IndState>) {
         (f64::NAN, None)
     }
 }

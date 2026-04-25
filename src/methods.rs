@@ -110,6 +110,7 @@ where
         for generation in 0..=self.config.max_generation {
             let stagnation =
                 (self.stagnation_counter as f32 / self.config.stagnation_count as f32).min(1.0);
+
             let sigma = self
                 .config
                 .sigma
@@ -199,7 +200,7 @@ where
                         .enumerate()
                         .filter(|(_, ind)| !ind.fitness.is_finite())
                         .map(|(i, ind)| {
-                            let (fitness, s) = scorer.score(&ind.genome, &ctx);
+                            let (fitness, s) = scorer.score(ind, &ctx);
                             (i, fitness, s)
                         })
                         .collect::<Vec<_>>()
@@ -256,11 +257,11 @@ where
                     .iter()
                     .filter_map(|parent| {
                         evolver
-                            .mutant(&parent.genome, &ctx)
+                            .mutant(parent, &ctx)
                             .map(|genome| (genome, parent.lineage.generation()))
                     })
-                    .map(|(genome, parent)| {
-                        Individual::new(genome, Lineage::Mutant(idx, generation, parent))
+                    .map(|(genome, parent_gen)| {
+                        Individual::new(genome, Lineage::Mutant(idx, generation, parent_gen))
                     })
                     .collect_vec();
                 (idx, new_mutants)
@@ -314,11 +315,9 @@ where
                             continue;
                         };
 
-                        let (ga, gb) = (dad.lineage.generation(), mom.lineage.generation());
-
                         for g in crossover.cross(
-                            &dad.genome,
-                            &mom.genome,
+                            dad,
+                            mom,
                             &Context::<G, GaState, IndState> {
                                 generation,
                                 diversity,
@@ -330,7 +329,7 @@ where
                                 __: std::marker::PhantomData,
                             },
                         ) {
-                            kids.push(Individual::new(g, Lineage::Child(ia, generation, ga, gb)));
+                            kids.push(Individual::new(g, Lineage::Child(ia, generation, dad.lineage.generation(), mom.lineage.generation())));
                         }
                     }
 

@@ -1,5 +1,5 @@
 use super::noisy_mutant;
-use darwin::{Context, Crossover, Gene, GeneRanges, Genome, GenomeRef, RangeSet, Sigma};
+use darwin::{Context, Crossover, Gene, GeneRanges, Genome, Individual, RangeSet, Sigma};
 use rand::RngExt;
 use std::iter;
 use std::ops::Add;
@@ -33,19 +33,19 @@ where
     /// Returns `[maybe_mutant, pure_child]` — mutant first if produced.
     fn cross(
         &self,
-        dad: GenomeRef<G>,
-        mom: GenomeRef<G>,
+        dad: &Individual<G, IndState>,
+        mom: &Individual<G, IndState>,
         ctx: &Context<'_, G, GaState, IndState>,
     ) -> Vec<Genome<G>> {
-        debug_assert_eq!(dad.len(), mom.len(), "parents must be same length");
+        debug_assert_eq!(dad.genome.len(), mom.genome.len(), "parents must be same length");
         debug_assert_eq!(
             self.groups.iter().sum::<usize>(),
-            dad.len(),
+            dad.genome.len(),
             "group sizes must sum to genome length"
         );
 
         let mut rng = rand::rng();
-        let mut child = Vec::with_capacity(dad.len());
+        let mut child = Vec::with_capacity(dad.genome.len());
 
         self.groups
             .iter()
@@ -56,9 +56,9 @@ where
             })
             .for_each(|(start, end)| {
                 let src = if rng.random_bool(0.5) {
-                    &dad[start..end]
+                    &dad.genome[start..end]
                 } else {
-                    &mom[start..end]
+                    &mom.genome[start..end]
                 };
                 child.extend_from_slice(src);
             });
@@ -74,7 +74,7 @@ where
 mod tests {
     use super::*;
     use super::super::DefaultGenerator;
-    use darwin::{Config, Generator, Pools};
+    use darwin::{Config, Generator, Individual, Pools};
     use std::marker::PhantomData;
 
     #[test]
@@ -98,8 +98,8 @@ mod tests {
             pools: &pools,
             __: PhantomData,
         };
-        let mom = generator.generate(&ctx);
-        let dad = generator.generate(&ctx);
+        let mom = Individual::firstborn(0, 0, generator.generate(&ctx));
+        let dad = Individual::firstborn(0, 0, generator.generate(&ctx));
 
         let children = crossover.cross(
             &dad,
@@ -120,8 +120,8 @@ mod tests {
 
         for (start, end) in bounds {
             let c = &child[start..end];
-            let a = &dad[start..end];
-            let m = &mom[start..end];
+            let a = &dad.genome[start..end];
+            let m = &mom.genome[start..end];
             assert!(
                 c == a || c == m,
                 "segment [{start},{end}) didn't match either parent"

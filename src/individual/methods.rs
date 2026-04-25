@@ -28,7 +28,7 @@ impl<G: Gene, IndState> Individual<G, IndState> {
         Sc: Scorer<G, GaState, IndState>,
     {
         if !self.fitness.is_finite() {
-            (self.fitness, self.state) = scorer.score(&self.genome, ctx);
+            (self.fitness, self.state) = scorer.score(self, ctx);
         }
     }
 }
@@ -39,8 +39,8 @@ mod tests {
     use crate::{Config, Pools};
     use spectral::prelude::*;
 
-    fn const_score(genome: &[i64], _: &Context<'_, i64, (), ()>) -> (f64, Option<()>) {
-        (genome.len() as f64, None)
+    fn const_score(ind: &Individual<i64, ()>, _: &Context<'_, i64, (), ()>) -> (f64, Option<()>) {
+        (ind.genome.len() as f64, None)
     }
 
     /// Freshly constructed individual has NaN fitness.
