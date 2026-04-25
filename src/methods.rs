@@ -132,12 +132,9 @@ where
                 self.best_fitness = self.pools.best().unwrap().1;
             }
 
-            let diversity =
-                self.pools.iter().map(|p| p.diversity()).sum::<f32>() / self.pools.len() as f32;
-
             let ctx = Context::<G, GaState, IndState> {
                 generation,
-                diversity,
+                diversity: f64::NAN as f32, // legacy field, not used in callback
                 stagnation,
                 normal,
                 config: self.config,
@@ -145,6 +142,7 @@ where
                 pools: &self.pools,
                 __: std::marker::PhantomData,
             };
+
             self.callback.call(&ctx);
 
             if self.stagnation(improved) {
@@ -416,8 +414,8 @@ where
 
     /// Check for stagnation: if the global best has not improved for a
     /// number of generations equal to `stall_generations`, return `true`.
-    fn stagnation(&mut self, new_best: bool) -> bool {
-        if new_best {
+    fn stagnation(&mut self, improved: bool) -> bool {
+        if improved {
             self.stagnation_counter = 0;
         } else {
             self.stagnation_counter += 1;
