@@ -47,9 +47,7 @@ mod tests {
         let cfg = Config::<i64>::default();
         let pools = darwin::Pools::<i64, ()>::from_vec(vec![]);
         let ctx = Context::<i64, (), ()> {
-            generation: 0,
-            stagnation: 0.0,
-            normal: rand_distr::Normal::new(0.0_f32, cfg.sigma.get(0, cfg.max_generation)).unwrap(),
+            epoch: darwin::Epoch { generation: 0, stagnation: 0.0, normal: rand_distr::Normal::new(0.0_f32, cfg.sigma.get(0, cfg.max_generation)).unwrap() },
             config: &cfg,
             state: &None,
             pools: &pools,

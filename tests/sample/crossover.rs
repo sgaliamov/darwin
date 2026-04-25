@@ -61,7 +61,7 @@ where
                 child.extend_from_slice(src);
             });
 
-        let child_ind = Individual::firstborn(dad.lineage.pool(), ctx.generation, child);
+        let child_ind = Individual::firstborn(dad.lineage.pool(), ctx.epoch.generation, child);
         noisy_mutant(&self.flat_ranges, &child_ind, ctx, &mut rng)
             .into_iter()
             .chain(iter::once(child_ind.genome))
@@ -88,9 +88,9 @@ mod tests {
         let pools = Pools::from_vec(vec![]);
         let sigma = ga_cfg.sigma.get(0, ga_cfg.max_generation);
         let ctx = Context::<i64, (), ()> {
-            generation: 0,
-            stagnation: 0.0,
-            normal: rand_distr::Normal::new(0.0_f32, sigma).unwrap(),
+            epoch: rand_distr::Normal::new(0.0_f32, sigma)
+                .map(|normal| darwin::Epoch { generation: 0, stagnation: 0.0, normal })
+                .unwrap(),
             config: &ga_cfg,
             state: &None::<()>,
             pools: &pools,

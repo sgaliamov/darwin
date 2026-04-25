@@ -47,9 +47,7 @@ mod tests {
         let ga_cfg = Config::default();
         let pools = darwin::Pools::<i64, ()>::from_vec(vec![]);
         let ctx = Context {
-            generation: 0,
-            stagnation: 0.0,
-            normal: rand_distr::Normal::new(0.0_f32, 0.01).unwrap(),
+            epoch: darwin::Epoch { generation: 0, stagnation: 0.0, normal: rand_distr::Normal::new(0.0_f32, 0.01).unwrap() },
             config: &ga_cfg,
             state: &None::<()>,
             pools: &pools,
@@ -80,9 +78,7 @@ mod tests {
         };
         let pools = darwin::Pools::<i64, ()>::from_vec(vec![]);
         let ctx = Context {
-            generation: 0,
-            stagnation: 0.0,
-            normal: rand_distr::Normal::new(0.0_f32, 1000.0_f32).unwrap(),
+            epoch: darwin::Epoch { generation: 0, stagnation: 0.0, normal: rand_distr::Normal::new(0.0_f32, 1000.0_f32).unwrap() },
             config: &ga_cfg,
             state: &None::<()>,
             pools: &pools,

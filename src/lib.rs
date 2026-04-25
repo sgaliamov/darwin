@@ -1,6 +1,7 @@
 //! Domain agnostic genetic algorithm implementation.
 mod config;
 mod context;
+mod epoch;
 mod genome;
 mod individual;
 mod methods;
@@ -11,6 +12,7 @@ mod traits;
 
 pub use config::*;
 pub use context::*;
+pub use epoch::*;
 pub use genome::*;
 pub use individual::*;
 pub use pool::*;

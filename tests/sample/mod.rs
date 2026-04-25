@@ -30,7 +30,7 @@ where
     let diversity = ctx.pools
         .get(individual.lineage.pool())
         .map_or(0.0, |p| p.diversity());
-    let noise = noise_factor(diversity, ctx.stagnation);
+    let noise = noise_factor(diversity, ctx.epoch.stagnation);
 
     individual.genome
         .iter()
@@ -42,7 +42,7 @@ where
                 return Some(*g);
             }
 
-            let shift_i64 = (ctx.normal.sample(rng) * noise).round() as i64;
+            let shift_i64 = (ctx.epoch.normal.sample(rng) * noise).round() as i64;
 
             // Attempts to convert `shift_i64` into the generic type `G`.
             // The conversion may fail if the value of `shift_i64` is out of range

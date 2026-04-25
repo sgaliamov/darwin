@@ -1,11 +1,12 @@
 ﻿use crate::{
-    Callback, Config, Context, Crossover, Gene, Generator, GeneticAlgorithm, Individual, Lineage,
-    Mutator, Pool, Pools, Scorer,
+    Callback, Config, Context, Crossover, Epoch, Gene, Generator, GeneticAlgorithm, Individual,
+    Lineage, Mutator, Pool, Pools, Scorer,
 };
 use itertools::Itertools;
 use rand::prelude::*;
 use rand_distr::Normal;
 use rayon::prelude::*;
+
 
 impl<'a, G, GaState, IndState, Gen, M, C, Sc, Cb>
     GeneticAlgorithm<'a, G, GaState, IndState, Gen, M, C, Sc, Cb>
@@ -116,12 +117,16 @@ where
                 .sigma
                 .get(generation, self.config.max_generation);
 
-            let normal = Normal::new(0.0_f32, sigma).expect("`sigma` must be positive");
+            let epoch = Epoch {
+                generation,
+                stagnation,
+                normal: Normal::new(0.0_f32, sigma).expect("`sigma` must be positive"),
+            };
 
-            self.mutate(generation, stagnation, normal);
-            self.recombine(generation, stagnation, normal);
-            self.random(generation, stagnation, normal);
-            self.evaluate_generation(generation, stagnation, normal);
+            self.mutate(epoch);
+            self.recombine(epoch);
+            self.random(epoch);
+            self.evaluate_generation(epoch);
 
             let improved = self
                 .pools
@@ -133,9 +138,7 @@ where
             }
 
             let ctx = Context::<G, GaState, IndState> {
-                generation,
-                stagnation,
-                normal,
+                epoch,
                 config: self.config,
                 state: &self.state,
                 pools: &self.pools,
@@ -167,7 +170,7 @@ where
     /// Evaluate all individuals (parallel) and sort each pool descending by
     /// fitness. Truncate back to `population_size` in case parents + offspring
     /// exceeded the limit.
-    fn evaluate_generation(&mut self, generation: usize, stagnation: f32, normal: Normal<f32>) {
+    fn evaluate_generation(&mut self, epoch: Epoch) {
         let config = self.config;
         let flat_genome = &self.flat_genome;
         let population_size = config.population_size;
@@ -185,9 +188,7 @@ where
                 .par_iter()
                 .map(|pool| {
                     let ctx = Context::<G, GaState, IndState> {
-                        generation,
-                        stagnation,
-                        normal,
+                        epoch,
                         config,
                         state,
                         pools,
@@ -226,13 +227,13 @@ where
     }
 
     /// Spawn elite mutants inside every pool.
-    fn mutate(&mut self, generation: usize, stagnation: f32, normal: Normal<f32>) {
-        // Calculate stagnation boost: ratio grows as we get stuck
+    fn mutate(&mut self, epoch: Epoch) {
         let evolver = &self.mutator;
         let mutant_count = self.mutant_count;
         let config = self.config;
         let state = &self.state;
         let pools = &self.pools;
+        let Epoch { generation, .. } = epoch;
 
         let mutants: Vec<(usize, Vec<Individual<G, IndState>>)> = self
             .pools
@@ -242,9 +243,7 @@ where
             .map(|(idx, pool)| {
                 let m = mutant_count.min(pool.individuals.len());
                 let ctx = Context::<G, GaState, IndState> {
-                    generation,
-                    stagnation,
-                    normal,
+                    epoch,
                     config,
                     state,
                     pools,
@@ -272,7 +271,8 @@ where
 
     /// Recombine pools into offspring, possibly mutate, then migrate them.
     /// Short story: pair pools, breed `crossover_size` times, push kids to a chosen pool.
-    fn recombine(&mut self, generation: usize, stagnation: f32, normal: Normal<f32>) {
+    fn recombine(&mut self, epoch: Epoch) {
+        let Epoch { generation, .. } = epoch;
         let Self {
             pools,
             crossover_size,
@@ -315,9 +315,7 @@ where
                             dad,
                             mom,
                             &Context::<G, GaState, IndState> {
-                                generation,
-                                stagnation,
-                                normal,
+                                epoch,
                                 config,
                                 state,
                                 pools: &*pools,
@@ -357,7 +355,8 @@ where
 
     /// Restore populations size to the original with random immigrants.
     /// May overpopulate.
-    fn random(&mut self, generation: usize, stagnation: f32, normal: Normal<f32>) {
+    fn random(&mut self, epoch: Epoch) {
+        let Epoch { generation, .. } = epoch;
         let quota = self.immigrant_count;
         // have to make the first generation bigger, as many individuals are not valid.
         // ideally generation method should be delegated to a client and he could ensure,
@@ -382,9 +381,7 @@ where
                 let deficit = target.saturating_sub(current_cnt);
                 let count = quota.max(deficit);
                 let ctx = Context::<G, GaState, IndState> {
-                    generation,
-                    stagnation,
-                    normal,
+                    epoch,
                     config,
                     state,
                     pools,
