@@ -1,7 +1,5 @@
 mod sample;
 
-fn main() {}
-
 #[cfg(test)]
 mod tests {
     use super::sample;
