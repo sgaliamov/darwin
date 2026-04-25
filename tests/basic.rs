@@ -25,7 +25,7 @@ mod tests {
     fn callback_fn(ctx: &Context<'_, i64, State<'_>, ()>) {
         let (config, writer) = ctx.state.as_ref().unwrap();
         let mut writer = writer.lock().unwrap();
-        let g = ctx.epoch.generation;
+        let g = ctx.generation;
 
         for pool in ctx.pools.iter() {
             let line = format!(

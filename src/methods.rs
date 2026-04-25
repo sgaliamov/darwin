@@ -137,13 +137,7 @@ where
                 self.best_fitness = self.pools.best().unwrap().1;
             }
 
-            let ctx = Context::<G, GaState, IndState> {
-                epoch,
-                state: &self.state,
-                pools: &self.pools,
-                __: std::marker::PhantomData,
-            };
-
+            let ctx = Context::new(epoch, &self.state, &self.pools);
             self.callback.call(&ctx);
 
             if self.stagnation(improved) {
@@ -186,12 +180,7 @@ where
             pools
                 .par_iter()
                 .map(|pool| {
-                    let ctx = Context::<G, GaState, IndState> {
-                        epoch,
-                        state,
-                        pools,
-                        __: std::marker::PhantomData,
-                    };
+                    let ctx = Context::new(epoch, state, pools);
                     pool.individuals
                         .par_iter()
                         .enumerate()
@@ -239,12 +228,7 @@ where
             .filter(|(_, pool)| !pool.individuals.is_empty())
             .map(|(idx, pool)| {
                 let m = mutant_count.min(pool.individuals.len());
-                let ctx = Context::<G, GaState, IndState> {
-                    epoch,
-                    state,
-                    pools,
-                    __: std::marker::PhantomData,
-                };
+                let ctx = Context::new(epoch, state, pools);
                 let new_mutants = pool.individuals[..m]
                     .iter()
                     .filter_map(|parent| {
@@ -310,12 +294,7 @@ where
                         for g in crossover.cross(
                             dad,
                             mom,
-                            &Context::<G, GaState, IndState> {
-                                epoch,
-                                state,
-                                pools: &*pools,
-                                __: std::marker::PhantomData,
-                            },
+                            &Context::new(epoch, state, &*pools),
                         ) {
                             kids.push(Individual::new(
                                 g,
@@ -374,12 +353,7 @@ where
                 let current_cnt = pool.individuals.len();
                 let deficit = target.saturating_sub(current_cnt);
                 let count = quota.max(deficit);
-                let ctx = Context::<G, GaState, IndState> {
-                    epoch,
-                    state,
-                    pools,
-                    __: std::marker::PhantomData,
-                };
+                let ctx = Context::new(epoch, state, pools);
 
                 let new_individuals = std::iter::repeat_with(|| {
                     Individual::firstborn(idx, generation, evolver.generate(&ctx))

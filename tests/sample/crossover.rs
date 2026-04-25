@@ -61,7 +61,7 @@ where
                 child.extend_from_slice(src);
             });
 
-        let child_ind = Individual::firstborn(dad.lineage.pool(), ctx.epoch.generation, child);
+        let child_ind = Individual::firstborn(dad.lineage.pool(), ctx.generation, child);
         noisy_mutant(&self.flat_ranges, &child_ind, ctx, &mut rng)
             .into_iter()
             .chain(iter::once(child_ind.genome))
@@ -74,7 +74,6 @@ mod tests {
     use super::*;
     use super::super::DefaultGenerator;
     use darwin::{Context, Generator, Individual, Pools};
-    use std::marker::PhantomData;
 
     #[test]
     fn cross_keeps_group_chunks_from_either_parent() {
@@ -85,12 +84,8 @@ mod tests {
         let crossover = DefaultCrossover::new(&range_set);
 
         let pools = Pools::from_vec(vec![]);
-        let ctx = Context::<i64, (), ()> {
-            epoch: darwin::Epoch { generation: 0, stagnation: 0.0, normal: rand_distr::Normal::new(0.0_f32, 1.0_f32).unwrap() },
-            state: &None::<()>,
-            pools: &pools,
-            __: PhantomData,
-        };
+        let epoch = darwin::Epoch { generation: 0, stagnation: 0.0, normal: rand_distr::Normal::new(0.0_f32, 1.0_f32).unwrap() };
+        let ctx = Context::<i64, (), ()>::new(epoch, &None::<()>, &pools);
         let mom = Individual::firstborn(0, 0, generator.generate(&ctx));
         let dad = Individual::firstborn(0, 0, generator.generate(&ctx));
 

@@ -46,12 +46,8 @@ mod tests {
         let generator = DefaultGenerator::new(&ranges);
         let cfg = Config::<i64>::default();
         let pools = darwin::Pools::<i64, ()>::from_vec(vec![]);
-        let ctx = Context::<i64, (), ()> {
-            epoch: darwin::Epoch { generation: 0, stagnation: 0.0, normal: rand_distr::Normal::new(0.0_f32, cfg.sigma.get(0, cfg.max_generation)).unwrap() },
-            state: &None,
-            pools: &pools,
-            __: std::marker::PhantomData,
-        };
+        let epoch = darwin::Epoch { generation: 0, stagnation: 0.0, normal: rand_distr::Normal::new(0.0_f32, cfg.sigma.get(0, cfg.max_generation)).unwrap() };
+        let ctx = Context::<i64, (), ()>::new(epoch, &None, &pools);
         for _ in 0..100 {
             let g = generator.generate(&ctx);
             for (gene, &(lo, hi)) in g.iter().zip(ranges.iter()) {
