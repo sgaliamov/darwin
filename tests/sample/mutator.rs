@@ -54,7 +54,6 @@ mod tests {
             stagnation: 0.0,
             config: &ga_cfg,
             state: &None::<()>,
-            best: &None,
             pools: &pools,
             __: std::marker::PhantomData,
         };
@@ -91,7 +90,6 @@ mod tests {
             stagnation: 0.0,
             config: &ga_cfg,
             state: &None::<()>,
-            best: &None,
             pools: &pools,
             __: std::marker::PhantomData,
         };

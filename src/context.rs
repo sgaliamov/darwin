@@ -1,4 +1,4 @@
-use crate::{Gene, Genome, Pools};
+use crate::{Gene, Pools};
 use std::marker::PhantomData;
 
 /// Context passed to all GA operators on each call.
@@ -21,10 +21,8 @@ pub struct Context<'a, G: Gene, GaState, IndState> {
     /// External GA state shared with all operators.
     pub state: &'a Option<GaState>,
 
-    /// Global best genome and fitness seen so far.
-    pub best: &'a Option<(Genome<G>, f64)>,
-
     /// All pools; allows cross-pool inspection (diversity, top individuals, etc.).
+    /// Use `ctx.pools.best()` to get the current best genome and fitness.
     pub pools: &'a Pools<G, IndState>,
 
     pub __: PhantomData<IndState>,

@@ -118,11 +118,8 @@ where
     /// critical for scenarios like sliding-window evolution where populations carry forward.
     pools: Pools<G, IndState>,
 
-    /// Keep genome and score only to not copy the whole [`crate::Individual`].
-    // tbd: [ga] pass pool and number of the best individual,
-    //      then we will be able to fetch more details about it, not only genome+fitness,
-    //      and avoid cloning.
-    best: Option<(Genome<G>, f64)>,
+    /// Best fitness seen so far; used for stagnation detection.
+    best_fitness: f64,
 
     /// External state for [`GeneticAlgorithm::score_fn`] and [`GeneticAlgorithm::callback_fn`].
     state: Option<GaState>,

@@ -1,5 +1,5 @@
 use super::Pool;
-use crate::Individual;
+use crate::{Gene, Genome, Individual};
 use itertools::Itertools;
 use std::ops::{Deref, DerefMut};
 
@@ -86,6 +86,19 @@ impl<G, IndState> Pools<G, IndState> {
             .sorted_by(|a, b| b.fitness.total_cmp(&a.fitness))
             .take(count)
             .collect()
+    }
+
+    /// Best individual across all pools: cloned genome + fitness.
+    /// Returns `None` if all pools are empty.
+    pub fn best(&self) -> Option<(Genome<G>, f64)>
+    where
+        G: Gene,
+    {
+        self.iter()
+            .flat_map(|pool| pool.individuals.iter())
+            .filter(|ind| ind.fitness.is_finite())
+            .max_by(|a, b| a.fitness.total_cmp(&b.fitness))
+            .map(|ind| (ind.genome.clone(), ind.fitness))
     }
 }
 

@@ -46,7 +46,7 @@ mod tests {
         let pools = darwin::Pools::<i64, ()>::from_vec(vec![]);
         let ctx = Context::<i64, (), ()> {
             generation: 0, diversity: 0.0, stagnation: 0.0,
-            config: &cfg, state: &None, best: &None,
+            config: &cfg, state: &None,
             pools: &pools,
             __: std::marker::PhantomData,
         };

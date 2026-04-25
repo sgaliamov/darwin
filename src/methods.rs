@@ -82,7 +82,7 @@ where
             scorer,
             callback,
             state: None,
-            best: None,
+            best_fitness: f64::NEG_INFINITY,
             config,
             pools,
             generator,
@@ -112,7 +112,12 @@ where
             self.recombine(generation);
             self.random(generation);
             self.evaluate_generation(generation);
-            let new_champ = self.update_champ();
+
+            let improved = self.pools.best()
+                .is_some_and(|(_, f)| f > self.best_fitness);
+            if improved {
+                self.best_fitness = self.pools.best().unwrap().1;
+            }
 
             let stagnation_ratio =
                 (self.stagnation_counter as f32 / self.config.stagnation_count as f32).min(1.0);
@@ -123,13 +128,12 @@ where
                 stagnation: stagnation_ratio,
                 config: self.config,
                 state: &self.state,
-                best: &self.best,
                 pools: &self.pools,
                 __: std::marker::PhantomData,
             };
             self.callback.call(&ctx, &self.pools);
 
-            if self.stagnation(new_champ) {
+            if self.stagnation(improved) {
                 break;
             }
         }
@@ -141,7 +145,7 @@ where
     /// Need to reset scores when the instance is reused,
     /// otherwise results from the previous run affects current.
     fn reset(&mut self) {
-        self.best = None;
+        self.best_fitness = f64::NEG_INFINITY;
         self.pools.par_iter_mut().for_each(|pool| {
             pool.individuals
                 .iter_mut()
@@ -163,7 +167,6 @@ where
 
         // Phase 2: score unscored individuals — immutable borrow lets ctx hold &pools.
         let scores: Vec<Vec<(usize, f64, Option<IndState>)>> = {
-            let best = &self.best;
             let state = &self.state;
             let scorer = &self.scorer;
             let pools = &self.pools;
@@ -177,7 +180,6 @@ where
                         stagnation,
                         config,
                         state,
-                        best,
                         pools,
                         __: std::marker::PhantomData,
                     };
@@ -213,33 +215,6 @@ where
         });
     }
 
-    /// Update `global_best` and diversity for pools.
-    ///
-    ///  Returns `true` if a better individual is found.
-    fn update_champ(&mut self) -> bool {
-        let candidate = self
-            .pools
-            .par_iter()
-            .flat_map(|pool| pool.individuals.par_iter())
-            .filter(|ind| ind.fitness.is_finite())
-            .max_by(|a, b| a.fitness.total_cmp(&b.fitness));
-
-        // tbd: [future, ga] ideally should not clone anything. it should be able to keep reference.
-        match (&self.best, candidate) {
-            (None, Some(champ)) => {
-                let best = (champ.genome.clone(), champ.fitness);
-                self.best = Some(best);
-                true
-            }
-            (Some((_, f)), Some(champ)) if &champ.fitness > f => {
-                let best = (champ.genome.clone(), champ.fitness);
-                self.best = Some(best);
-                true
-            }
-            _ => false,
-        }
-    }
-
     /// Spawn elite mutants inside every pool.
     fn mutate(&mut self, generation: usize) {
         // Calculate stagnation boost: ratio grows as we get stuck
@@ -250,7 +225,6 @@ where
         let mutant_count = self.mutant_count;
         let config = self.config;
         let state = &self.state;
-        let best = &self.best;
         let pools = &self.pools;
 
         let mutants: Vec<(usize, Vec<Individual<G, IndState>>)> = self
@@ -266,7 +240,6 @@ where
                     stagnation: stagnation_boost,
                     config,
                     state,
-                    best,
                     pools,
                     __: std::marker::PhantomData,
                 };
@@ -304,7 +277,6 @@ where
             mutant_count,
             state,
             config,
-            best,
             ..
         } = self;
 
@@ -348,7 +320,6 @@ where
                                 stagnation: stagnation_boost,
                                 config,
                                 state,
-                                best,
                                 pools: &*pools,
                                 __: std::marker::PhantomData,
                             },
@@ -392,7 +363,6 @@ where
         let evolver = &self.generator;
         let config = self.config;
         let state = &self.state;
-        let best = &self.best;
         let stagnation = (self.stagnation_counter as f32 / config.stagnation_count as f32).min(1.0);
         let pools = &self.pools;
 
@@ -410,7 +380,6 @@ where
                     stagnation,
                     config,
                     state,
-                    best,
                     pools,
                     __: std::marker::PhantomData,
                 };
