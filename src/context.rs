@@ -1,5 +1,4 @@
 use crate::{GenInfo, Gene, Pools};
-use std::marker::PhantomData;
 use std::ops::Deref;
 
 /// Context passed to all GA operators on each call.
@@ -8,7 +7,6 @@ pub struct Context<'a, G: Gene, GaState, IndState> {
     info: &'a GenInfo,
     pub state: &'a Option<GaState>,    // external GA state
     pub pools: &'a Pools<G, IndState>, // all pools for cross-pool inspection
-    pub __: PhantomData<IndState>,
 }
 
 impl<'a, G: Gene, GaState, IndState> Context<'a, G, GaState, IndState> {
@@ -21,7 +19,6 @@ impl<'a, G: Gene, GaState, IndState> Context<'a, G, GaState, IndState> {
             info,
             state,
             pools,
-            __: PhantomData,
         }
     }
 }

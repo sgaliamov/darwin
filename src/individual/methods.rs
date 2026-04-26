@@ -1,4 +1,4 @@
-use crate::{Context, Gene, Genome, Individual, Lineage, Scorer};
+use crate::{Context, Gene, Genome, Individual, Lineage, Evaluator};
 
 impl<G, IndState> Individual<G, IndState> {
     /// Name without genome.
@@ -23,12 +23,12 @@ impl<G, IndState> Individual<G, IndState> {
 
 impl<G: Gene, IndState> Individual<G, IndState> {
     /// Compute and cache fitness. Idempotent.
-    pub fn evaluate<GaState, Sc>(&mut self, scorer: &Sc, ctx: &Context<'_, G, GaState, IndState>)
+    pub fn evaluate<GaState, E>(&mut self, evaluator: &E, ctx: &Context<'_, G, GaState, IndState>)
     where
-        Sc: Scorer<G, GaState, IndState>,
+        E: Evaluator<G, GaState, IndState>,
     {
         if !self.fitness.is_finite() {
-            (self.fitness, self.state) = scorer.evaluate(self, ctx);
+            (self.fitness, self.state) = evaluator.evaluate(self, ctx);
         }
     }
 }

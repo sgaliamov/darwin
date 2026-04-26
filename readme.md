@@ -5,7 +5,7 @@ Domain-agnostic, island-model genetic algorithm library in Rust.
 ## Features
 
 - **Island model** — multiple pools evolve in parallel with configurable migration
-- **Injectable operators** — plug your own generator, mutator, crossover, scorer, and callback via traits or closures
+- **Injectable operators** — plug your own generator, mutator, crossover, evaluator, and callback via traits or closures
 - **Sigma annealing** — Gaussian mutation noise decays linearly from `sigma.max` → `sigma.min`
 - **Stagnation detection** — auto-stops when fitness plateaus for `stagnation_count` generations
 - **Diversity tracking** — per-pool diversity metric drives adaptive noise scaling
@@ -68,10 +68,10 @@ Implement these traits (or pass closures — blanket impls exist for `Fn`):
 | `Generator` | `generate(ctx) → Genome`                              | Random genome creation          |
 | `Mutator`   | `mutant(individual, ctx) → Option<Genome>`            | Mutation; `None` = out of range |
 | `Crossover` | `cross(dad, mom, ctx) → Vec<Genome>`                  | Recombination                   |
-| `Scorer`    | `evaluate(individual, ctx) → (f64, Option<IndState>)` | Fitness function                |
+| `Evaluator` | `evaluate(individual, ctx) → (f64, Option<IndState>)` | Genome → fitness + domain state |
 | `Callback`  | `call(ctx)`                                           | Per-generation reporting        |
 
-All traits require `Send + Sync` for parallel execution. No-op implementations (`NoopGenerator`, `NoopMutator`, `NoopCrossover`, `NoopScorer`, `NoopCallback`) are provided.
+All traits require `Send + Sync` for parallel execution. No-op implementations (`NoopMutator`, `NoopCrossover`, `NoopEvaluator`, `NoopCallback`) are provided.
 
 ### Context
 
@@ -107,29 +107,26 @@ let flat_ranges: Vec<(i64, i64)> = config.ranges.iter().flatten().cloned().colle
 // Generator: uniform random within ranges
 let generator = |ctx: &Context<'_, i64, (), ()>| -> Genome<i64> {
     // ... produce random genome within flat_ranges
-    todo!()
 };
 
 // Mutator: Gaussian perturbation
 let mutator = |ind: &Individual<i64, ()>, ctx: &Context<'_, i64, (), ()>| -> Option<Genome<i64>> {
     // ... apply noise to ind.genome, return None if out of bounds
-    todo!()
 };
 
 // Crossover: uniform crossover
 let crossover = |dad: &Individual<i64, ()>, mom: &Individual<i64, ()>, ctx: &Context<'_, i64, (), ()>| -> Vec<Genome<i64>> {
     // ... mix genes from dad and mom
-    todo!()
 };
 
-// Scorer: negative sphere (GA maximizes fitness)
-let scorer = |ind: &Individual<i64, ()>, _: &Context<'_, i64, (), ()>| -> (f64, Option<()>) {
+// Evaluator: negative sphere (GA maximizes fitness)
+let evaluator = |ind: &Individual<i64, ()>, _: &Context<'_, i64, (), ()>| -> (f64, Option<()>) {
     let f = -ind.genome.iter().map(|&x| (x as f64).powi(2)).sum::<f64>();
     (f, None)
 };
 
 let mut ga = GeneticAlgorithm::new(
-    &config, generator, mutator, crossover, scorer, NoopCallback,
+    &config, generator, mutator, crossover, evaluator, NoopCallback,
 );
 
 let pools = ga.run();
@@ -140,15 +137,15 @@ println!("Best genome: {:?}", best[0].genome);
 
 ### With External State
 
-Pass state to scorer/callback via `set_state`:
+Pass state to evaluator/callback via `set_state`:
 
 ```rust
 struct MyState {
     target: Vec<i64>,
 }
 
-// Scorer uses state
-let scorer = |ind: &Individual<i64, MyState>, ctx: &Context<'_, i64, MyState, ()>| {
+// Evaluator uses state
+let evaluator = |ind: &Individual<i64, MyState>, ctx: &Context<'_, i64, MyState, ()>| {
     let target = &ctx.state.as_ref().unwrap().target;
     let dist: f64 = ind.genome.iter()
         .zip(target)
@@ -189,9 +186,9 @@ where $g$ = current generation, $G$ = `max_generation`. Actual mutation amplitud
 ```
 ┌─────────────────────────────────────┐
 │         GeneticAlgorithm            │
-│  ┌──────┐ ┌──────┐     ┌──────┐    │
-│  │Pool 0│ │Pool 1│ ... │Pool N│    │
-│  └──┬───┘ └──┬───┘     └──┬───┘    │
+│  ┌──────┐ ┌──────┐     ┌──────┐     │
+│  │Pool 0│ │Pool 1│ ... │Pool N│     │
+│  └──┬───┘ └──┬───┘     └──┬───┘     │
 │     │        │             │        │
 │  Each generation per pool:          │
 │  1. Mutate top individuals          │

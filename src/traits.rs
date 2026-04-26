@@ -31,8 +31,8 @@ pub trait Crossover<G: Gene, GaState, IndState>: Send + Sync {
     ) -> Vec<Genome<G>>;
 }
 
-/// Computes fitness for a genome; must be `Send + Sync` for Rayon sharing.
-pub trait Scorer<G: Gene, GaState, IndState>: Send + Sync {
+/// Evaluates a genome into fitness and optional domain state; must be `Send + Sync` for Rayon sharing.
+pub trait Evaluator<G: Gene, GaState, IndState>: Send + Sync {
     /// Return `(fitness, individual_state)` for `individual`.
     fn evaluate(
         &self,
@@ -98,7 +98,7 @@ where
     }
 }
 
-impl<G, GaState, IndState, F> Scorer<G, GaState, IndState> for F
+impl<G, GaState, IndState, F> Evaluator<G, GaState, IndState> for F
 where
     G: Gene,
     F: Fn(&Individual<G, IndState>, &Context<'_, G, GaState, IndState>) -> (f64, Option<IndState>)
@@ -128,15 +128,6 @@ where
 // No-op implementations
 // ---------------------------------------------------------------------------
 
-/// No-op generator; panics — placeholder only, should never be called.
-pub struct NoopGenerator;
-
-impl<G: Gene, GaState, IndState> Generator<G, GaState, IndState> for NoopGenerator {
-    fn generate(&self, _: &Context<'_, G, GaState, IndState>) -> Genome<G> {
-        panic!("NoopGenerator::generate called")
-    }
-}
-
 /// No-op mutator; always returns `None`.
 pub struct NoopMutator;
 
@@ -164,10 +155,10 @@ impl<G: Gene, GaState, IndState> Crossover<G, GaState, IndState> for NoopCrossov
     }
 }
 
-/// No-op scorer; returns `f64::NAN` for all genomes.
-pub struct NoopScorer;
+/// No-op evaluator; returns `f64::NAN` for all genomes.
+pub struct NoopEvaluator;
 
-impl<G: Gene, GaState, IndState> Scorer<G, GaState, IndState> for NoopScorer {
+impl<G: Gene, GaState, IndState> Evaluator<G, GaState, IndState> for NoopEvaluator {
     fn evaluate(
         &self,
         _: &Individual<G, IndState>,

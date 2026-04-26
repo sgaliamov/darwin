@@ -1,6 +1,6 @@
 use crate::{
     Callback, Config, Context, Crossover, GenInfo, Gene, Generator, GeneticAlgorithm, Individual,
-    Lineage, Mutator, Pool, Pools, Scorer,
+    Lineage, Mutator, Pool, Pools, Evaluator,
 };
 use itertools::Itertools;
 use rand::prelude::*;
@@ -16,7 +16,7 @@ where
     Gen: Generator<G, GaState, IndState>,
     M: Mutator<G, GaState, IndState>,
     C: Crossover<G, GaState, IndState>,
-    Sc: Scorer<G, GaState, IndState>,
+    Sc: Evaluator<G, GaState, IndState>,
     Cb: Callback<G, GaState, IndState>,
 {
     pub fn new(
@@ -24,7 +24,7 @@ where
         generator: Gen,
         mutator: M,
         crossover: C,
-        scorer: Sc,
+        evaluator: Sc,
         callback: Cb,
     ) -> Self {
         assert!(config.stagnation_count > 0, "stall_generations must be > 0");
@@ -80,7 +80,7 @@ where
 
         Self {
             flat_genome,
-            scorer,
+            evaluator,
             callback,
             state: None,
             best_fitness: f64::NEG_INFINITY,
@@ -96,7 +96,7 @@ where
         }
     }
 
-    /// Optional external state can be set for use in `scorer` and `callback`.
+    /// Optional external state can be set for use in `evaluator` and `callback`.
     pub fn set_state(&mut self, state: GaState) {
         self.state = Some(state);
     }
@@ -165,7 +165,7 @@ where
         self.pools.par_iter_mut().for_each(|pool| pool.dedup());
 
         // Phase 2: score unscored individuals.
-        let scorer = &self.scorer;
+        let evaluator = &self.evaluator;
         let ctx = Context::new(gen_info, &self.state, &self.pools);
         let scores: Vec<Vec<(usize, f64, Option<IndState>)>> = self
             .pools
@@ -176,7 +176,7 @@ where
                     .enumerate()
                     .filter(|(_, ind)| !ind.fitness.is_finite())
                     .map(|(i, ind)| {
-                        let (fitness, s) = scorer.evaluate(ind, &ctx);
+                        let (fitness, s) = evaluator.evaluate(ind, &ctx);
                         (i, fitness, s)
                     })
                     .collect::<Vec<_>>()
@@ -300,7 +300,7 @@ where
     /// May overpopulate.
     fn random(&mut self, gen_info: &GenInfo) {
         let quota = self.immigrant_count;
-        // Generation 0: overseed so the scorer has enough valid individuals to work with.
+        // Generation 0: overseed so the evaluator has enough valid individuals to work with.
         let target = if gen_info.generation == 0 {
             self.config.population_size * 10
         } else {

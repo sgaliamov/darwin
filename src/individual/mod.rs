@@ -17,6 +17,6 @@ pub struct Individual<G, State> {
     /// Cached fitness.
     pub fitness: f64,
 
-    /// State returned by scorer. Can be used for memoization or to pass info from scorer to callback.
+    /// State returned by evaluator. Can be used for memoization or to pass info from evaluator to callback.
     pub state: Option<State>,
 }

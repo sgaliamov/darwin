@@ -21,13 +21,13 @@ pub use sigma::*;
 pub use traits::*;
 
 /// Evolution engine with independently injectable genome operations.
-pub struct GeneticAlgorithm<'a, G, GaState, IndState, Gen, M, C, Sc, Cb>
+pub struct GeneticAlgorithm<'a, G, GaState, IndState, Gr, M, C, E, Cb>
 where
     G: Gene,
-    Gen: Generator<G, GaState, IndState>,
+    Gr: Generator<G, GaState, IndState>,
     M: Mutator<G, GaState, IndState>,
     C: Crossover<G, GaState, IndState>,
-    Sc: Scorer<G, GaState, IndState>,
+    E: Evaluator<G, GaState, IndState>,
     Cb: Callback<G, GaState, IndState>,
 {
     /// GA configuration.
@@ -41,17 +41,17 @@ where
     /// Best fitness seen so far; used for stagnation detection.
     best_fitness: f64,
 
-    /// External state for [`GeneticAlgorithm::score_fn`] and [`GeneticAlgorithm::callback_fn`].
+    /// External state.
     state: Option<GaState>,
 
-    /// Fitness function.
-    scorer: Sc,
+    /// Evaluates genomes into fitness + state.
+    evaluator: E,
 
     /// Callback to report progress outside each generation.
     callback: Cb,
 
     /// Random genome generator.
-    generator: Gen,
+    generator: Gr,
 
     /// Mutation operator.
     mutator: M,
