@@ -1,17 +1,17 @@
-use crate::{GeneRangesRef, Individual};
+use crate::{Gene, GeneRangesRef, Individual};
 use rand::{Rng, seq::IteratorRandom};
 use std::cmp::Ordering;
 
 /// Evolves in isolation except for explicit migration/crossover.
 #[derive(Debug)]
-pub struct Pool<State> {
+pub struct Pool<G, State> {
     pub number: usize,
-    pub individuals: Vec<Individual<State>>,
+    pub individuals: Vec<Individual<G, State>>,
     diversity: f32,
 }
 
-impl<State> Pool<State> {
-    pub fn new(number: usize, individuals: Vec<Individual<State>>) -> Self {
+impl<G, State> Pool<G, State> {
+    pub fn new(number: usize, individuals: Vec<Individual<G, State>>) -> Self {
         Self {
             number,
             individuals,
@@ -19,6 +19,13 @@ impl<State> Pool<State> {
         }
     }
 
+    /// Returns current diversity value.
+    pub fn diversity(&self) -> f32 {
+        self.diversity
+    }
+}
+
+impl<G: Gene, State> Pool<G, State> {
     /// It's assumed that new individuals inserted last,
     /// which mean that only new duplicates should be removed.
     /// Changes order.
@@ -43,7 +50,7 @@ impl<State> Pool<State> {
         tournament_size: usize,
         mutant_count: usize,
         rng: &mut R,
-    ) -> Option<&Individual<State>> {
+    ) -> Option<&Individual<G, State>> {
         let k = tournament_size.min(self.individuals.len());
 
         self.individuals
@@ -58,7 +65,7 @@ impl<State> Pool<State> {
     /// Average variance over loci.
     /// Result varies from 0.0 (no diversity) to 1.0 (all different).
     /// Need to be calculated after all changes with the pool.
-    pub fn calc_diversity(&mut self, ranges: GeneRangesRef) -> f32 {
+    pub fn calc_diversity(&mut self, ranges: GeneRangesRef<G>) -> f32 {
         let n = self.individuals.len() as f64;
         if n == 0.0 {
             return 0.0;
@@ -73,7 +80,7 @@ impl<State> Pool<State> {
             .filter_map(|gn_idx| {
                 let range = ranges[gn_idx];
                 let (min, max) = (range.0, range.1);
-                let span = (max - min) as f64;
+                let span = (max - min).to_f64();
 
                 // Skip constant genes (zero span) - they contribute nothing to diversity
                 if span == 0.0 {
@@ -86,7 +93,7 @@ impl<State> Pool<State> {
                     .fold((0_f64, 0_f64), |(s, ss), ind| {
                         debug_assert!((min..=max).contains(&ind.genome[gn_idx]));
 
-                        let x = (ind.genome[gn_idx] - min) as f64 / span;
+                        let x = (ind.genome[gn_idx] - min).to_f64() / span;
                         debug_assert!((0.0..=1.0).contains(&x));
 
                         (s + x, ss + x * x)
@@ -111,30 +118,14 @@ impl<State> Pool<State> {
         self.diversity = diversity.clamp(0.0, 1.0) as f32;
         self.diversity
     }
-
-    /// Calculate mutation noise factor with optional stagnation boost for increased exploration.
-    /// Returns a value in [0.0, 1.0] where higher means more aggressive mutations.
-    ///
-    /// `stagnation_boost` (0.0 to 1.0) increases exploration when stagnating:
-    /// - 0.0 = normal noise based on diversity
-    /// - 1.0 = maximum noise (1.0) to force exploration
-    pub fn noise_factor(&self, stagnation_boost: f32) -> f32 {
-        debug_assert!((0.0..=1.0).contains(&stagnation_boost));
-
-        let base_noise = 1.0 - self.diversity;
-        base_noise + stagnation_boost * (1.0 - base_noise)
-    }
-
-    /// Returns current diversity value.
-    pub fn diversity(&self) -> f32 {
-        self.diversity
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Evolution, Lineage, Pool};
+    use crate::Pool;
+    #[allow(dead_code)]
+    type G = i64;
     use itertools::Itertools;
     use rand::{RngExt, SeedableRng, rngs::StdRng};
     use spectral::prelude::*;
@@ -142,10 +133,9 @@ mod tests {
     #[test]
     fn test_diversity() {
         let ranges = &[(0, 1_000); 100];
-        let mut evo = Evolution::new(ranges, 1.0, 0.0, &[100]);
 
         let individuals = (0..100)
-            .map(|_| Individual::<()>::firstborn(0, evo.random()))
+            .map(|_| Individual::<_, ()>::firstborn(0, 0, random_genome(ranges)))
             .collect_vec();
 
         let mut pool = Pool::new(0, individuals);
@@ -153,85 +143,6 @@ mod tests {
 
         // completely random items gives ~0.33
         assert_that!(actual).is_close_to(0.333, 0.02);
-    }
-
-    #[test]
-    fn test_mutants() {
-        let ranges = &[(0, 1000)];
-        let test_cases = &[
-            // sigma, tolerance
-            (0.05, 1e-6), // no deviations
-            (0.1, 1e-6),  // 499 - 501 - min deviations
-            (2., 1e-4),   // 490 - 511
-            (20., 1e-2),  // 400 - 600
-            (50., 0.05),  // 250 - 750
-            (100., 0.1),  // 0 - 1000 - full bell
-            (1000., 1.0), // flat, but drops 2/3 populations
-        ];
-
-        for &(sigma, tolerance) in test_cases {
-            let noise_factor = 1.0;
-            let items = (0..1_000)
-                .filter_map(|g| {
-                    let mut evo = Evolution::new(ranges, sigma, 0.0, &[1]);
-                    evo.mutant(&[500], noise_factor)
-                        .map(|genome| Individual::<()>::new(genome, Lineage::Mutant(0, g)))
-                })
-                .collect_vec();
-
-            let _left = items.len();
-            let mut pool = Pool::new(0, items);
-            let actual = pool.calc_diversity(ranges);
-
-            asserting(&format!("Sigma {sigma}"))
-                .that(&actual)
-                .is_close_to(0.0, tolerance);
-        }
-    }
-
-    // #[test]
-    fn _tuning() {
-        let ranges = &[(0, 100)];
-        let std_dev = 0.5; // 5% // 1 - 10% // 2 - 20% // 5 - 50%;
-        let noise_factor = 1.0;
-        let mut evo = Evolution::new(ranges, 1.0, std_dev, &[1]);
-
-        let items = (0..100_000)
-            .map(|g| {
-                let genome = evo.mutant(&[50], noise_factor).unwrap();
-                Individual::<()>::new(genome, Lineage::Mutant(0, g))
-            })
-            .collect_vec();
-
-        let left = items.len();
-        let mut pool = Pool::new(0, items);
-        let actual = pool.calc_diversity(ranges);
-
-        // to tune sigma
-        let genomes = pool
-            .individuals
-            .into_iter()
-            .flat_map(|x| x.genome)
-            .sorted()
-            .chunk_by(|&x| x)
-            .into_iter()
-            .map(|x| (x.0, x.1.count()))
-            .collect_vec();
-        let min_max = genomes.iter().minmax_by_key(|x| x.1).into_option().unwrap();
-        let avg = genomes.iter().map(|x| x.1 as f32).sum::<f32>() as usize / genomes.len();
-        println!(
-            "{:#?}\n{}: [{:?}, {:?}, {:?}, {:?}, {}]\n{actual}\n",
-            genomes
-                .iter()
-                .map(|x| format!("{}: {}", x.0, x.1))
-                .collect_vec(),
-            left,
-            genomes.first().unwrap(),
-            min_max.0,
-            min_max.1,
-            genomes.last().unwrap(),
-            avg
-        );
     }
 
     #[test]
@@ -244,9 +155,9 @@ mod tests {
             .collect_vec();
 
         let individuals = (0..10)
-            .map(|_| Individual::firstborn(0, genome.clone()))
+            .map(|_| Individual::firstborn(0, 0, genome.clone()))
             .collect_vec();
-        let mut pool = Pool::<()>::new(0, individuals);
+        let mut pool = Pool::<_, ()>::new(0, individuals);
 
         let actual = pool.calc_diversity(ranges);
 
@@ -274,7 +185,7 @@ mod tests {
             let individuals = genes
                 .iter()
                 .cloned()
-                .map(|genome| Individual::<()>::firstborn(0, genome))
+                .map(|genome| Individual::<_, ()>::firstborn(0, 0, genome))
                 .collect();
 
             let mut pool = Pool::new(0, individuals);
@@ -301,7 +212,7 @@ mod tests {
             let individuals = genes
                 .iter()
                 .cloned()
-                .map(|genome| Individual::<()>::firstborn(0, genome))
+                .map(|genome| Individual::<_, ()>::firstborn(0, 0, genome))
                 .collect();
 
             let mut pool = Pool::new(0, individuals);
@@ -317,9 +228,9 @@ mod tests {
         // All genes are constant
         let ranges = &[(1000, 1000), (500, 500), (42, 42)];
         let individuals = vec![
-            Individual::<()>::firstborn(0, vec![1000, 500, 42]),
-            Individual::<()>::firstborn(0, vec![1000, 500, 42]),
-            Individual::<()>::firstborn(0, vec![1000, 500, 42]),
+            Individual::<_, ()>::firstborn(0, 0, vec![1000i64, 500, 42]),
+            Individual::<_, ()>::firstborn(0, 0, vec![1000i64, 500, 42]),
+            Individual::<_, ()>::firstborn(0, 0, vec![1000i64, 500, 42]),
         ];
 
         let mut pool = Pool::new(0, individuals);
@@ -333,23 +244,21 @@ mod tests {
 
     fn test_remove_duplicates() {
         let ranges = &[(0, 1_000); 10];
-        let mut evo = Evolution::new(ranges, 1.0, 0.0, &[10]);
-        let i1 = Individual::firstborn(0, evo.random());
-        let i2 = Individual::firstborn(0, evo.random());
+        let i1 = Individual::firstborn(0, 0, random_genome(ranges));
+        let i2 = Individual::firstborn(0, 0, random_genome(ranges));
         let i3 = Individual::new(i2.genome.clone(), i2.lineage.clone());
 
-        let mut pool = Pool::<()>::new(0, vec![i1, i2, i3]);
+        let mut pool = Pool::<_, ()>::new(0, vec![i1, i2, i3]);
         pool.dedup();
 
-        assert_that!(pool.individuals).has_length(2);
+        assert_that!(pool.individuals.len()).is_equal_to(2);
     }
 
     #[test]
     fn test_deduplication_keeps_with_fitness() {
         let ranges = &[(0, 1_000); 10];
-        let mut evo = Evolution::new(ranges, 1.0, 0.0, &[10]);
-        let i1 = Individual::firstborn(0, evo.random());
-        let mut i2 = Individual::<()>::new(i1.genome.clone(), i1.lineage.clone());
+        let i1 = Individual::firstborn(0, 0, random_genome(ranges));
+        let mut i2 = Individual::<_, ()>::new(i1.genome.clone(), i1.lineage.clone());
         i2.fitness = 1.0;
         let mut pool = Pool::new(0, vec![i1, i2]);
 
@@ -359,29 +268,8 @@ mod tests {
         assert_that!(pool.individuals[0].fitness).is_equal_to(1.0);
     }
 
-    #[test]
-    fn test_noise_factor_with_stagnation() {
-        let test_cases = [
-            // (diversity, stagnation_boost, expected_noise)
-            (0.0, 0.0, 1.0),  // low diversity, no stagnation → max noise
-            (1.0, 0.0, 0.0),  // high diversity, no stagnation → min noise
-            (0.5, 0.0, 0.5),  // mid diversity, no stagnation → mid noise
-            (0.0, 1.0, 1.0),  // low diversity, max stagnation → max noise
-            (1.0, 1.0, 1.0),  // high diversity, max stagnation → max noise (forced exploration)
-            (0.5, 0.5, 0.75), // mid diversity, mid stagnation → boosted noise
-            (0.8, 0.5, 0.6), // high diversity (0.2 base noise), mid stagnation → 0.2 + 0.5 * 0.8 = 0.6
-        ];
-
-        for (div, boost, expected) in test_cases {
-            let individuals = vec![Individual::<()>::firstborn(0, vec![50])];
-            let mut pool = Pool::new(0, individuals);
-            pool.diversity = div; // manually set diversity for testing
-
-            let noise = pool.noise_factor(boost);
-
-            asserting(&format!("Noise for diversity={div}, boost={boost}"))
-                .that(&noise)
-                .is_close_to(expected, 1e-6);
-        }
+    fn random_genome(ranges: &[(i64, i64)]) -> Vec<i64> {
+        let mut rng = rand::rng();
+        ranges.iter().map(|r| rng.random_range(r.0..=r.1)).collect()
     }
 }

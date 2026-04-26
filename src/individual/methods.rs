@@ -1,13 +1,13 @@
-use crate::{Genome, Individual, Lineage, ScoreFn};
+use crate::{Context, Gene, Genome, Individual, Lineage, Evaluator};
 
-impl<IndState> Individual<IndState> {
+impl<G, IndState> Individual<G, IndState> {
     /// Name without genome.
     pub fn name(&self) -> String {
         format!("ω{:.6} | {:<8}", self.fitness, self.lineage.to_string())
     }
 
     /// Main constructor.
-    pub fn new(genome: Genome, lineage: Lineage) -> Self {
+    pub fn new(genome: Genome<G>, lineage: Lineage) -> Self {
         Self {
             lineage,
             genome,
@@ -16,18 +16,85 @@ impl<IndState> Individual<IndState> {
         }
     }
 
-    pub fn firstborn(generation: usize, genome: Genome) -> Self {
-        Self::new(genome, Lineage::Firstborn(generation))
+    pub fn firstborn(pool: usize, generation: usize, genome: Genome<G>) -> Self {
+        Self::new(genome, Lineage::Firstborn(pool, generation))
+    }
+}
+
+impl<G: Gene, IndState> Individual<G, IndState> {
+    /// Compute and cache fitness. Idempotent.
+    pub fn evaluate<GaState, E>(&mut self, evaluator: &E, ctx: &Context<'_, G, GaState, IndState>)
+    where
+        E: Evaluator<G, GaState, IndState>,
+    {
+        if !self.fitness.is_finite() {
+            (self.fitness, self.state) = evaluator.evaluate(self, ctx);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{Config, GenInfo, Pools};
+    use spectral::prelude::*;
+
+    fn const_evaluate(
+        ind: &Individual<i64, ()>,
+        _: &Context<'_, i64, (), ()>,
+    ) -> (f64, Option<()>) {
+        (ind.genome.len() as f64, None)
     }
 
-    /// Compute and cache fitness. Idempotent.
-    pub fn evaluate<GaState>(
-        &mut self,
-        score: &ScoreFn<GaState, IndState>,
-        state: &Option<GaState>,
-    ) {
-        if !self.fitness.is_finite() {
-            (self.fitness, self.state) = score(&self.genome, state);
-        }
+    /// Freshly constructed individual has NaN fitness.
+    #[test]
+    fn new_individual_has_nan_fitness() {
+        let ind = Individual::<i64, ()>::firstborn(0, 0, vec![1, 2, 3]);
+        assert_that!(ind.fitness.is_nan()).is_true();
+    }
+
+    /// `evaluate` sets fitness on first call.
+    #[test]
+    fn evaluate_sets_fitness() {
+        let cfg = Config::<i64>::default();
+        let pools = Pools::<i64, ()>::default();
+        let gen_info = GenInfo {
+            generation: 0,
+            stagnation: 0.0,
+            distribution: rand_distr::Normal::new(0.0_f32, cfg.sigma.get(0, cfg.max_generation))
+                .unwrap(),
+        };
+        let ctx = Context::<i64, (), ()>::new(&gen_info, &None, &pools);
+        let mut ind = Individual::<i64, ()>::firstborn(0, 0, vec![1, 2, 3]);
+        ind.evaluate(&const_evaluate, &ctx);
+        assert_that!(ind.fitness).is_equal_to(3.0);
+    }
+
+    /// `evaluate` is idempotent — second call does not re-score.
+    #[test]
+    fn evaluate_is_idempotent() {
+        let cfg = Config::<i64>::default();
+        let pools = Pools::<i64, ()>::default();
+        let gen_info = GenInfo {
+            generation: 0,
+            stagnation: 0.0,
+            distribution: rand_distr::Normal::new(0.0_f32, cfg.sigma.get(0, cfg.max_generation))
+                .unwrap(),
+        };
+        let ctx = Context::<i64, (), ()>::new(&gen_info, &None, &pools);
+        let mut ind = Individual::<i64, ()>::firstborn(0, 0, vec![1, 2, 3]);
+        ind.evaluate(&const_evaluate, &ctx);
+        assert_that!(ind.fitness).is_equal_to(3.0);
+        // Override the genome to verify score is NOT recomputed.
+        ind.genome = vec![9, 9, 9, 9, 9];
+        ind.evaluate(&const_evaluate, &ctx);
+        assert_that!(ind.fitness).is_equal_to(3.0); // still original
+    }
+
+    /// `firstborn` wraps genome in Firstborn lineage at given generation.
+    #[test]
+    fn firstborn_lineage_matches_generation() {
+        let ind = Individual::<i64, ()>::firstborn(0, 5, vec![0]);
+        assert!(matches!(ind.lineage, Lineage::Firstborn(_, 5)));
     }
 }

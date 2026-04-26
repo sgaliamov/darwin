@@ -8,12 +8,15 @@ pub use lineage::*;
 /// Individual – holds DNA and its cached fitness value.
 /// Cannot be cloneable to not force `State` be cloneable as well.
 #[derive(Debug)]
-pub struct Individual<State> {
+pub struct Individual<G, State> {
     pub lineage: Lineage,
 
     /// Flat DNA.
-    // tbd: [ga] group genomes like in the config.
-    pub genome: Genome,
+    pub genome: Genome<G>,
+
+    /// Cached fitness.
     pub fitness: f64,
+
+    /// State returned by evaluator. Can be used for memoization or to pass info from evaluator to callback.
     pub state: Option<State>,
 }
