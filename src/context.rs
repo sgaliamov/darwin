@@ -12,12 +12,23 @@ pub struct Context<'a, G: Gene, GaState, IndState> {
 }
 
 impl<'a, G: Gene, GaState, IndState> Context<'a, G, GaState, IndState> {
-    pub fn new(epoch: &'a Epoch, state: &'a Option<GaState>, pools: &'a Pools<G, IndState>) -> Self {
-        Self { epoch, state, pools, __: PhantomData }
+    pub fn new(
+        epoch: &'a Epoch,
+        state: &'a Option<GaState>,
+        pools: &'a Pools<G, IndState>,
+    ) -> Self {
+        Self {
+            epoch,
+            state,
+            pools,
+            __: PhantomData,
+        }
     }
 }
 
 impl<G: Gene, GaState, IndState> Deref for Context<'_, G, GaState, IndState> {
     type Target = Epoch;
-    fn deref(&self) -> &Epoch { self.epoch }
+    fn deref(&self) -> &Epoch {
+        self.epoch
+    }
 }

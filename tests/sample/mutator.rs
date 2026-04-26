@@ -45,7 +45,11 @@ mod tests {
         let genome = vec![500_000i64];
         // sigma=0.01 → shift rounds to 0 for integers almost always
         let pools = darwin::Pools::<i64, ()>::from_vec(vec![]);
-        let epoch = darwin::Epoch { generation: 0, stagnation: 0.0, normal: rand_distr::Normal::new(0.0_f32, 0.01).unwrap() };
+        let epoch = darwin::Epoch {
+            generation: 0,
+            stagnation: 0.0,
+            normal: rand_distr::Normal::new(0.0_f32, 0.01).unwrap(),
+        };
         let ctx = Context::new(&epoch, &None::<()>, &pools);
         let ind = Individual::firstborn(0, 0, genome.clone());
         let mut same = 0usize;
@@ -62,12 +66,14 @@ mod tests {
     /// `mutant` result always stays within range even with huge sigma.
     #[test]
     fn mutant_never_exceeds_range() {
-        let mutator = DefaultMutator::new(
-            &[(0i64, 10)],
-        );
+        let mutator = DefaultMutator::new(&[(0i64, 10)]);
         let genome = vec![5i64];
         let pools = darwin::Pools::<i64, ()>::from_vec(vec![]);
-        let epoch = darwin::Epoch { generation: 0, stagnation: 0.0, normal: rand_distr::Normal::new(0.0_f32, 1000.0_f32).unwrap() };
+        let epoch = darwin::Epoch {
+            generation: 0,
+            stagnation: 0.0,
+            normal: rand_distr::Normal::new(0.0_f32, 1000.0_f32).unwrap(),
+        };
         let ctx = Context::new(&epoch, &None::<()>, &pools);
         let ind = Individual::firstborn(0, 0, genome.clone());
         // mutants that land outside the range return None — verify any Some is in range

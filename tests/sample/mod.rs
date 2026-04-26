@@ -27,12 +27,14 @@ where
     G: Gene + Add<Output = G> + TryFrom<i64>,
     GaState: Sync,
 {
-    let diversity = ctx.pools
+    let diversity = ctx
+        .pools
         .get(individual.lineage.pool())
         .map_or(0.0, |p| p.diversity());
     let noise = noise_factor(diversity, ctx.stagnation);
 
-    individual.genome
+    individual
+        .genome
         .iter()
         .enumerate()
         .map(|(i, g)| {

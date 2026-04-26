@@ -39,7 +39,10 @@ mod tests {
     use crate::{Config, Epoch, Pools};
     use spectral::prelude::*;
 
-    fn const_evaluate(ind: &Individual<i64, ()>, _: &Context<'_, i64, (), ()>) -> (f64, Option<()>) {
+    fn const_evaluate(
+        ind: &Individual<i64, ()>,
+        _: &Context<'_, i64, (), ()>,
+    ) -> (f64, Option<()>) {
         (ind.genome.len() as f64, None)
     }
 
@@ -55,7 +58,11 @@ mod tests {
     fn evaluate_sets_fitness() {
         let cfg = Config::<i64>::default();
         let pools = Pools::<i64, ()>::default();
-        let epoch = Epoch { generation: 0, stagnation: 0.0, normal: rand_distr::Normal::new(0.0_f32, cfg.sigma.get(0, cfg.max_generation)).unwrap() };
+        let epoch = Epoch {
+            generation: 0,
+            stagnation: 0.0,
+            normal: rand_distr::Normal::new(0.0_f32, cfg.sigma.get(0, cfg.max_generation)).unwrap(),
+        };
         let ctx = Context::<i64, (), ()>::new(&epoch, &None, &pools);
         let mut ind = Individual::<i64, ()>::firstborn(0, 0, vec![1, 2, 3]);
         ind.evaluate(&const_evaluate, &ctx);
@@ -67,7 +74,11 @@ mod tests {
     fn evaluate_is_idempotent() {
         let cfg = Config::<i64>::default();
         let pools = Pools::<i64, ()>::default();
-        let epoch = Epoch { generation: 0, stagnation: 0.0, normal: rand_distr::Normal::new(0.0_f32, cfg.sigma.get(0, cfg.max_generation)).unwrap() };
+        let epoch = Epoch {
+            generation: 0,
+            stagnation: 0.0,
+            normal: rand_distr::Normal::new(0.0_f32, cfg.sigma.get(0, cfg.max_generation)).unwrap(),
+        };
         let ctx = Context::<i64, (), ()>::new(&epoch, &None, &pools);
         let mut ind = Individual::<i64, ()>::firstborn(0, 0, vec![1, 2, 3]);
         ind.evaluate(&const_evaluate, &ctx);
@@ -85,4 +96,3 @@ mod tests {
         assert!(matches!(ind.lineage, Lineage::Firstborn(_, 5)));
     }
 }
-

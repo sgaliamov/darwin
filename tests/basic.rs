@@ -4,17 +4,18 @@ mod sample;
 mod tests {
     use super::sample;
     use darwin::{Config, Context, GeneticAlgorithm, Individual, NoopCallback};
-    use sample::{DefaultCrossover, DefaultGenerator, DefaultMutator};
     use itertools::Itertools;
+    use sample::{DefaultCrossover, DefaultGenerator, DefaultMutator};
     use spectral::prelude::*;
-    use std::sync::Mutex;
     use std::io::{BufWriter, Write};
+    use std::sync::Mutex;
 
     type State<'a> = (&'a Config<i64>, Mutex<BufWriter<&'a mut Vec<u8>>>);
 
     /// Fitness = ∑x² → 0 at the origin.
     fn sphere(ind: &Individual<i64, ()>, _ctx: &Context<'_, i64, State, ()>) -> (f64, Option<()>) {
-        let score = -ind.genome
+        let score = -ind
+            .genome
             .iter()
             .map(|&x| x as f64 / 99.0)
             .map(|x: f64| x.powi(2))
@@ -106,8 +107,13 @@ mod tests {
         let mutator = DefaultMutator::new(&ranges);
         let crossover = DefaultCrossover::new(&config.ranges);
         let mut ga = GeneticAlgorithm::<i64, (), (), _, _, _, _, _>::new(
-            &config, generator, mutator, crossover,
-            |ind: &Individual<i64, ()>, _: &Context<'_, i64, (), ()>| (-(ind.genome[0] as f64).powi(2), None),
+            &config,
+            generator,
+            mutator,
+            crossover,
+            |ind: &Individual<i64, ()>, _: &Context<'_, i64, (), ()>| {
+                (-(ind.genome[0] as f64).powi(2), None)
+            },
             NoopCallback,
         );
 
@@ -135,8 +141,13 @@ mod tests {
         let mutator = DefaultMutator::new(&ranges);
         let crossover = DefaultCrossover::new(&config.ranges);
         let mut ga = GeneticAlgorithm::<i64, (), (), _, _, _, _, _>::new(
-            &config, generator, mutator, crossover,
-            |ind: &Individual<i64, ()>, _: &Context<'_, i64, (), ()>| (-(ind.genome[0] as f64).powi(2), None),
+            &config,
+            generator,
+            mutator,
+            crossover,
+            |ind: &Individual<i64, ()>, _: &Context<'_, i64, (), ()>| {
+                (-(ind.genome[0] as f64).powi(2), None)
+            },
             NoopCallback,
         );
 
@@ -162,7 +173,12 @@ mod tests {
         let mutator = DefaultMutator::new(&ranges);
         let crossover = DefaultCrossover::new(&config.ranges);
         let mut ga = GeneticAlgorithm::<i64, (), (), _, _, _, _, _>::new(
-            &config, generator, mutator, crossover, sphere_no_state, NoopCallback,
+            &config,
+            generator,
+            mutator,
+            crossover,
+            sphere_no_state,
+            NoopCallback,
         );
 
         let first_best = ga.run().top_individuals_mut(1).first().unwrap().fitness;
@@ -184,7 +200,7 @@ mod tests {
             (0.0, 1.0, 1.0),  // low diversity, max stagnation → max noise
             (1.0, 1.0, 1.0),  // high diversity, max stagnation → max noise (forced exploration)
             (0.5, 0.5, 0.75), // mid diversity, mid stagnation → boosted noise
-            (0.8, 0.5, 0.6),  // high diversity (0.2 base noise), mid stagnation → 0.2 + 0.5 * 0.8 = 0.6
+            (0.8, 0.5, 0.6), // high diversity (0.2 base noise), mid stagnation → 0.2 + 0.5 * 0.8 = 0.6
         ];
 
         for (div, boost, expected) in test_cases {
@@ -194,8 +210,12 @@ mod tests {
         }
     }
 
-    fn sphere_no_state(ind: &Individual<i64, ()>, _: &Context<'_, i64, (), ()>) -> (f64, Option<()>) {
-        let score = -ind.genome
+    fn sphere_no_state(
+        ind: &Individual<i64, ()>,
+        _: &Context<'_, i64, (), ()>,
+    ) -> (f64, Option<()>) {
+        let score = -ind
+            .genome
             .iter()
             .map(|&x| x as f64 / 99.0)
             .map(|x: f64| x.powi(2))
@@ -208,7 +228,8 @@ mod tests {
         let generator = DefaultGenerator::new(&ranges);
         let mutator = DefaultMutator::new(&ranges);
         let crossover = DefaultCrossover::new(&config.ranges);
-        let mut ga = GeneticAlgorithm::new(&config, generator, mutator, crossover, sphere, callback_fn);
+        let mut ga =
+            GeneticAlgorithm::new(&config, generator, mutator, crossover, sphere, callback_fn);
         ga.set_state((&config, Mutex::new(writer)));
         let pools = ga.run();
         pools

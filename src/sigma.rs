@@ -22,10 +22,7 @@ impl Sigma {
 
 impl Default for Sigma {
     fn default() -> Self {
-        Self {
-            max: 3.0,
-            min: 1.0,
-        }
+        Self { max: 3.0, min: 1.0 }
     }
 }
 
@@ -37,7 +34,10 @@ mod tests {
     /// Sigma at gen 0 = max; at last gen ≈ min.
     #[test]
     fn sigma_anneals_from_max_to_min() {
-        let cfg = Sigma { max: 10.0, min: 1.0 };
+        let cfg = Sigma {
+            max: 10.0,
+            min: 1.0,
+        };
         assert_that!(cfg.get(0, 10)).is_close_to(10.0, 1e-5);
         assert_that!(cfg.get(9, 10)).is_close_to(1.0, 1e-5);
     }

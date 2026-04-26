@@ -35,7 +35,11 @@ where
         mom: &Individual<G, IndState>,
         ctx: &Context<'_, G, GaState, IndState>,
     ) -> Vec<Genome<G>> {
-        debug_assert_eq!(dad.genome.len(), mom.genome.len(), "parents must be same length");
+        debug_assert_eq!(
+            dad.genome.len(),
+            mom.genome.len(),
+            "parents must be same length"
+        );
         debug_assert_eq!(
             self.groups.iter().sum::<usize>(),
             dad.genome.len(),
@@ -71,8 +75,8 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::DefaultGenerator;
+    use super::*;
     use darwin::{Context, Generator, Individual, Pools};
 
     #[test]
@@ -84,14 +88,17 @@ mod tests {
         let crossover = DefaultCrossover::new(&range_set);
 
         let pools = Pools::from_vec(vec![]);
-        let epoch = darwin::Epoch { generation: 0, stagnation: 0.0, normal: rand_distr::Normal::new(0.0_f32, 1.0_f32).unwrap() };
+        let epoch = darwin::Epoch {
+            generation: 0,
+            stagnation: 0.0,
+            normal: rand_distr::Normal::new(0.0_f32, 1.0_f32).unwrap(),
+        };
         let ctx = Context::<i64, (), ()>::new(&epoch, &None::<()>, &pools);
         let mom = Individual::firstborn(0, 0, generator.generate(&ctx));
         let dad = Individual::firstborn(0, 0, generator.generate(&ctx));
 
         let children = crossover.cross(
-            &dad,
-            &mom,
+            &dad, &mom,
             // diversity=1.0, stagnation=0.0 → noise=0.0 → no mutation; pure child is last
             &ctx,
         );
