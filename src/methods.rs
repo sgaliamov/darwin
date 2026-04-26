@@ -122,41 +122,10 @@ where
                 normal: Normal::new(0.0_f32, sigma).expect("`sigma` must be positive"),
             };
 
-            Self::mutate(
-                &mut self.pools,
-                &self.mutator,
-                self.mutant_count,
-                &self.state,
-                &epoch,
-            );
-
-            Self::recombine(
-                &mut self.pools,
-                &self.crossover,
-                self.crossover_size,
-                self.mutant_count,
-                self.config,
-                &self.state,
-                &epoch,
-            );
-
-            Self::random(
-                &mut self.pools,
-                &self.generator,
-                self.immigrant_count,
-                self.config,
-                &self.state,
-                &epoch,
-            );
-
-            Self::evaluate_generation(
-                &mut self.pools,
-                &self.scorer,
-                self.config.population_size,
-                &self.flat_genome,
-                &self.state,
-                &epoch,
-            );
+            self.mutate(&epoch);
+            self.recombine(&epoch);
+            self.random(&epoch);
+            self.evaluate_generation(&epoch);
 
             let improved = self
                 .pools
@@ -193,37 +162,32 @@ where
     /// Evaluate all individuals (parallel) and sort each pool descending by
     /// fitness. Truncate back to `population_size` in case parents + offspring
     /// exceeded the limit.
-    fn evaluate_generation(
-        pools: &mut Pools<G, IndState>,
-        scorer: &Sc,
-        population_size: usize,
-        flat_genome: &[crate::GeneRange<G>],
-        state: &Option<GaState>,
-        epoch: &Epoch,
-    ) {
+    fn evaluate_generation(&mut self, epoch: &Epoch) {
         // Phase 1: remove duplicates before scoring.
-        pools.par_iter_mut().for_each(|pool| pool.dedup());
+        self.pools.par_iter_mut().for_each(|pool| pool.dedup());
 
-        let ctx = Context::new(epoch, state, pools);
-
-        // Phase 2: score unscored individuals — immutable borrow lets ctx hold &pools.
-        let scores: Vec<Vec<(usize, f64, Option<IndState>)>> = pools
-            .par_iter()
-            .map(|pool| {
-                pool.individuals
-                    .par_iter()
-                    .enumerate()
-                    .filter(|(_, ind)| !ind.fitness.is_finite())
-                    .map(|(i, ind)| {
-                        let (fitness, s) = scorer.evaluate(ind, &ctx);
-                        (i, fitness, s)
-                    })
-                    .collect::<Vec<_>>()
-            })
-            .collect();
+        // Phase 2: score unscored individuals — block drops ctx before mutable phase.
+        let scores: Vec<Vec<(usize, f64, Option<IndState>)>> = {
+            let scorer = &self.scorer;
+            let ctx = Context::new(epoch, &self.state, &self.pools);
+            self.pools
+                .par_iter()
+                .map(|pool| {
+                    pool.individuals
+                        .par_iter()
+                        .enumerate()
+                        .filter(|(_, ind)| !ind.fitness.is_finite())
+                        .map(|(i, ind)| {
+                            let (fitness, s) = scorer.evaluate(ind, &ctx);
+                            (i, fitness, s)
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .collect()
+        };
 
         // Phase 3: apply collected scores.
-        for (pool_scores, pool) in scores.into_iter().zip(pools.iter_mut()) {
+        for (pool_scores, pool) in scores.into_iter().zip(self.pools.iter_mut()) {
             for (idx, fitness, ind_state) in pool_scores {
                 pool.individuals[idx].fitness = fitness;
                 pool.individuals[idx].state = ind_state;
@@ -231,159 +195,150 @@ where
         }
 
         // Phase 4: housekeeping — retain, sort, truncate, update diversity.
-        pools.par_iter_mut().for_each(|pool| {
+        self.pools.par_iter_mut().for_each(|pool| {
             pool.individuals.retain(|ind| ind.fitness.is_finite());
             pool.individuals
                 .sort_unstable_by(|a, b| b.fitness.total_cmp(&a.fitness));
-            pool.individuals.truncate(population_size);
+            pool.individuals.truncate(self.config.population_size);
             // diversity need to be updated before callback to provide actual state.
-            pool.calc_diversity(flat_genome);
+            pool.calc_diversity(&self.flat_genome);
         });
     }
 
     /// Spawn elite mutants inside every pool.
-    fn mutate(
-        pools: &mut Pools<G, IndState>,
-        mutator: &M,
-        mutant_count: usize,
-        state: &Option<GaState>,
-        epoch: &Epoch,
-    ) {
-        let ctx = Context::new(epoch, state, pools);
-
-        let mutants: Vec<(usize, Vec<Individual<G, IndState>>)> = pools
-            .par_iter()
-            .enumerate()
-            .filter(|(_, pool)| !pool.individuals.is_empty())
-            .map(|(idx, pool)| {
-                let m = mutant_count.min(pool.individuals.len());
-                let new_mutants = pool.individuals[..m]
-                    .iter()
-                    .filter_map(|parent| {
-                        mutator
-                            .mutant(parent, &ctx)
-                            .map(|genome| (genome, parent.lineage.generation()))
-                    })
-                    .map(|(genome, parent_gen)| {
-                        Individual::new(genome, Lineage::Mutant(idx, epoch.generation, parent_gen))
-                    })
-                    .collect_vec();
-                (idx, new_mutants)
-            })
-            .collect();
+    fn mutate(&mut self, epoch: &Epoch) {
+        let mutants: Vec<(usize, Vec<Individual<G, IndState>>)> = {
+            let mutator = &self.mutator;
+            let mutant_count = self.mutant_count;
+            let ctx = Context::new(epoch, &self.state, &self.pools);
+            self.pools
+                .par_iter()
+                .enumerate()
+                .filter(|(_, pool)| !pool.individuals.is_empty())
+                .map(|(idx, pool)| {
+                    let m = mutant_count.min(pool.individuals.len());
+                    let new_mutants = pool.individuals[..m]
+                        .iter()
+                        .filter_map(|parent| {
+                            mutator
+                                .mutant(parent, &ctx)
+                                .map(|genome| (genome, parent.lineage.generation()))
+                        })
+                        .map(|(genome, parent_gen)| {
+                            Individual::new(
+                                genome,
+                                Lineage::Mutant(idx, epoch.generation, parent_gen),
+                            )
+                        })
+                        .collect_vec();
+                    (idx, new_mutants)
+                })
+                .collect()
+        };
 
         for (idx, new_mutants) in mutants {
-            pools[idx].individuals.extend(new_mutants);
+            self.pools[idx].individuals.extend(new_mutants);
         }
     }
 
     /// Recombine pools into offspring, possibly mutate, then migrate them.
     /// Short story: pair pools, breed `crossover_size` times, push kids to a chosen pool.
-    fn recombine(
-        pools: &mut Pools<G, IndState>,
-        crossover: &C,
-        crossover_size: usize,
-        mutant_count: usize,
-        config: &Config<G>,
-        state: &Option<GaState>,
-        epoch: &Epoch,
-    ) {
-        let ctx = Context::new(epoch, state, pools);
+    fn recombine(&mut self, epoch: &Epoch) {
+        let offspring: Vec<_> = {
+            let crossover: &C = &self.crossover;
+            let crossover_size = self.crossover_size;
+            let mutant_count = self.mutant_count;
+            let config = self.config;
+            let pools: &Pools<G, IndState> = &self.pools;
+            let ctx = Context::new(epoch, &self.state, pools);
 
-        let offspring: Vec<_> = pools
-            .pairs(epoch.generation)
-            .par_iter()
-            .map_init(
-                || SmallRng::from_rng(&mut rand::rng()),
-                |rng, &(ia, ib)| {
-                    let pa = &pools[ia];
-                    let pb = &pools[ib];
-                    let mut kids = Vec::with_capacity(crossover_size * 2); // 2 as cross may produce 2 kids
+            pools
+                .pairs(epoch.generation)
+                .par_iter()
+                .map_init(
+                    || SmallRng::from_rng(&mut rand::rng()),
+                    |rng, &(ia, ib)| {
+                        let pa = &pools[ia];
+                        let pb = &pools[ib];
+                        let mut kids = Vec::with_capacity(crossover_size * 2); // 2 as cross may produce 2 kids
 
-                    // Average diversity of the two paired pools gives a fair signal
-                    // without arbitrarily favouring one partner over the other.
+                        // Average diversity of the two paired pools gives a fair signal
+                        // without arbitrarily favouring one partner over the other.
 
-                    for _ in 0..crossover_size {
-                        let (Some(dad), Some(mom)) = (
-                            pa.tournament_selection(config.tournament_size, mutant_count, rng),
-                            pb.tournament_selection(config.tournament_size, mutant_count, rng),
-                        ) else {
-                            continue;
-                        };
+                        for _ in 0..crossover_size {
+                            let (Some(dad), Some(mom)) = (
+                                pa.tournament_selection(config.tournament_size, mutant_count, rng),
+                                pb.tournament_selection(config.tournament_size, mutant_count, rng),
+                            ) else {
+                                continue;
+                            };
 
-                        for g in crossover.cross(dad, mom, &ctx) {
-                            kids.push(Individual::new(
-                                g,
-                                Lineage::Child(
-                                    ia,
-                                    epoch.generation,
-                                    dad.lineage.generation(),
-                                    mom.lineage.generation(),
-                                ),
-                            ));
+                            for g in crossover.cross(dad, mom, &ctx) {
+                                kids.push(Individual::new(
+                                    g,
+                                    Lineage::Child(
+                                        ia,
+                                        epoch.generation,
+                                        dad.lineage.generation(),
+                                        mom.lineage.generation(),
+                                    ),
+                                ));
+                            }
                         }
-                    }
 
-                    (!kids.is_empty()).then_some((ia, ib, kids))
-                },
-            )
-            .flatten()
-            .collect();
+                        (!kids.is_empty()).then_some((ia, ib, kids))
+                    },
+                )
+                .flatten()
+                .collect()
+        };
 
-        let mig = config.migration_factor;
+        let mig = self.config.migration_factor;
         let mut rng = SmallRng::from_rng(&mut rand::rng());
 
         for (ia, ib, kids) in offspring {
-            let idx = if rng.random_bool(mig) {
-                ia.max(ib)
-            } else {
-                ia.min(ib)
-            };
-            pools[idx].individuals.extend(kids);
+            let idx = if rng.random_bool(mig) { ia.max(ib) } else { ia.min(ib) };
+            self.pools[idx].individuals.extend(kids);
         }
     }
 
     /// Restore populations size to the original with random immigrants.
     /// May overpopulate.
-    fn random(
-        pools: &mut Pools<G, IndState>,
-        generator: &Gen,
-        quota: usize,
-        config: &Config<G>,
-        state: &Option<GaState>,
-        epoch: &Epoch,
-    ) {
-        let ctx = Context::new(epoch, state, pools);
-
+    fn random(&mut self, epoch: &Epoch) {
+        let quota = self.immigrant_count;
         // have to make the first generation bigger, as many individuals are not valid.
         // ideally generation method should be delegated to a client and he could ensure,
         // that new individuals are valid.
         let target = if epoch.generation == 0 {
-            config.population_size * 10
+            self.config.population_size * 10
         } else {
-            config.population_size
+            self.config.population_size
         };
 
-        let immigrants: Vec<(usize, Vec<Individual<G, IndState>>)> = pools
-            .par_iter()
-            .enumerate()
-            .map(|(idx, pool)| {
-                let current_cnt = pool.individuals.len();
-                let deficit = target.saturating_sub(current_cnt);
-                let count = quota.max(deficit);
+        let immigrants: Vec<(usize, Vec<Individual<G, IndState>>)> = {
+            let generator = &self.generator;
+            let ctx = Context::new(epoch, &self.state, &self.pools);
+            self.pools
+                .par_iter()
+                .enumerate()
+                .map(|(idx, pool)| {
+                    let current_cnt = pool.individuals.len();
+                    let deficit = target.saturating_sub(current_cnt);
+                    let count = quota.max(deficit);
 
-                let new_individuals = std::iter::repeat_with(|| {
-                    Individual::firstborn(idx, epoch.generation, generator.generate(&ctx))
+                    let new_individuals = std::iter::repeat_with(|| {
+                        Individual::firstborn(idx, epoch.generation, generator.generate(&ctx))
+                    })
+                    .take(count)
+                    .collect::<Vec<_>>();
+
+                    (idx, new_individuals)
                 })
-                .take(count)
-                .collect::<Vec<_>>();
-
-                (idx, new_individuals)
-            })
-            .collect();
+                .collect()
+        };
 
         for (idx, new_individuals) in immigrants {
-            pools[idx].individuals.extend(new_individuals);
+            self.pools[idx].individuals.extend(new_individuals);
         }
     }
 
