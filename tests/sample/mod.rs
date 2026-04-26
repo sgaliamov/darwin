@@ -44,7 +44,7 @@ where
                 return Some(*g);
             }
 
-            let shift_i64 = (ctx.normal.sample(rng) * noise).round() as i64;
+            let shift_i64 = (ctx.distribution.sample(rng) * noise).round() as i64;
 
             // Attempts to convert `shift_i64` into the generic type `G`.
             // The conversion may fail if the value of `shift_i64` is out of range

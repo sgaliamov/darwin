@@ -1,5 +1,5 @@
 use crate::{
-    Callback, Config, Context, Crossover, Epoch, Gene, Generator, GeneticAlgorithm, Individual,
+    Callback, Config, Context, Crossover, GenInfo, Gene, Generator, GeneticAlgorithm, Individual,
     Lineage, Mutator, Pool, Pools, Scorer,
 };
 use itertools::Itertools;
@@ -116,16 +116,16 @@ where
                 .sigma
                 .get(generation, self.config.max_generation);
 
-            let epoch = Epoch {
+            let gen_info = GenInfo {
                 generation,
                 stagnation,
-                normal: Normal::new(0.0_f32, sigma).expect("`sigma` must be positive"),
+                distribution: Normal::new(0.0_f32, sigma).expect("`sigma` must be positive"),
             };
 
-            self.mutate(&epoch);
-            self.recombine(&epoch);
-            self.random(&epoch);
-            self.evaluate_generation(&epoch);
+            self.mutate(&gen_info);
+            self.recombine(&gen_info);
+            self.random(&gen_info);
+            self.evaluate_generation(&gen_info);
 
             let best_fitness = self.pools.best().map(|(_, f)| f);
             let improved = best_fitness.is_some_and(|f| f > self.best_fitness);
@@ -134,7 +134,7 @@ where
                 self.best_fitness = best_fitness.unwrap();
             }
 
-            let ctx = Context::new(&epoch, &self.state, &self.pools);
+            let ctx = Context::new(&gen_info, &self.state, &self.pools);
             self.callback.call(&ctx);
 
             if self.stagnation(improved) {
@@ -160,13 +160,13 @@ where
     /// Evaluate all individuals (parallel) and sort each pool descending by
     /// fitness. Truncate back to `population_size` in case parents + offspring
     /// exceeded the limit.
-    fn evaluate_generation(&mut self, epoch: &Epoch) {
+    fn evaluate_generation(&mut self, gen_info: &GenInfo) {
         // Phase 1: remove duplicates before scoring.
         self.pools.par_iter_mut().for_each(|pool| pool.dedup());
 
         // Phase 2: score unscored individuals.
         let scorer = &self.scorer;
-        let ctx = Context::new(epoch, &self.state, &self.pools);
+        let ctx = Context::new(gen_info, &self.state, &self.pools);
         let scores: Vec<Vec<(usize, f64, Option<IndState>)>> = self
             .pools
             .par_iter()
@@ -203,10 +203,10 @@ where
     }
 
     /// Spawn elite mutants inside every pool.
-    fn mutate(&mut self, epoch: &Epoch) {
+    fn mutate(&mut self, gen_info: &GenInfo) {
         let mutator = &self.mutator;
         let mutant_count = self.mutant_count;
-        let ctx = Context::new(epoch, &self.state, &self.pools);
+        let ctx = Context::new(gen_info, &self.state, &self.pools);
         let mutants = self
             .pools
             .par_iter()
@@ -222,7 +222,10 @@ where
                             .map(|genome| (genome, parent.lineage.generation()))
                     })
                     .map(|(genome, parent_gen)| {
-                        Individual::new(genome, Lineage::Mutant(idx, epoch.generation, parent_gen))
+                        Individual::new(
+                            genome,
+                            Lineage::Mutant(idx, gen_info.generation, parent_gen),
+                        )
                     })
                     .collect_vec();
                 (idx, new_mutants)
@@ -236,15 +239,15 @@ where
 
     /// Recombine pools into offspring, possibly mutate, then migrate them.
     /// Short story: pair pools, breed `crossover_size` times, push kids to a chosen pool.
-    fn recombine(&mut self, epoch: &Epoch) {
+    fn recombine(&mut self, gen_info: &GenInfo) {
         let crossover: &C = &self.crossover;
         let crossover_size = self.crossover_size;
         let mutant_count = self.mutant_count;
         let config = self.config;
         let pools: &Pools<G, IndState> = &self.pools;
-        let ctx = Context::new(epoch, &self.state, pools);
+        let ctx = Context::new(gen_info, &self.state, pools);
         let offspring: Vec<_> = pools
-            .pairs(epoch.generation)
+            .pairs(gen_info.generation)
             .par_iter()
             .map_init(
                 || SmallRng::from_rng(&mut rand::rng()),
@@ -266,7 +269,7 @@ where
                                 g,
                                 Lineage::Child(
                                     ia,
-                                    epoch.generation,
+                                    gen_info.generation,
                                     dad.lineage.generation(),
                                     mom.lineage.generation(),
                                 ),
@@ -295,17 +298,17 @@ where
 
     /// Restore populations size to the original with random immigrants.
     /// May overpopulate.
-    fn random(&mut self, epoch: &Epoch) {
+    fn random(&mut self, gen_info: &GenInfo) {
         let quota = self.immigrant_count;
         // Generation 0: overseed so the scorer has enough valid individuals to work with.
-        let target = if epoch.generation == 0 {
+        let target = if gen_info.generation == 0 {
             self.config.population_size * 10
         } else {
             self.config.population_size
         };
 
         let generator = &self.generator;
-        let ctx = Context::new(epoch, &self.state, &self.pools);
+        let ctx = Context::new(gen_info, &self.state, &self.pools);
         let immigrants = self
             .pools
             .par_iter()
@@ -315,7 +318,7 @@ where
                 let deficit = target.saturating_sub(current_cnt);
                 let count = quota.max(deficit);
                 let new_individuals = std::iter::repeat_with(|| {
-                    Individual::firstborn(idx, epoch.generation, generator.generate(&ctx))
+                    Individual::firstborn(idx, gen_info.generation, generator.generate(&ctx))
                 })
                 .take(count)
                 .collect::<Vec<_>>();

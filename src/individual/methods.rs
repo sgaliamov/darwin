@@ -36,7 +36,7 @@ impl<G: Gene, IndState> Individual<G, IndState> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Config, Epoch, Pools};
+    use crate::{Config, GenInfo, Pools};
     use spectral::prelude::*;
 
     fn const_evaluate(
@@ -58,12 +58,13 @@ mod tests {
     fn evaluate_sets_fitness() {
         let cfg = Config::<i64>::default();
         let pools = Pools::<i64, ()>::default();
-        let epoch = Epoch {
+        let gen_info = GenInfo {
             generation: 0,
             stagnation: 0.0,
-            normal: rand_distr::Normal::new(0.0_f32, cfg.sigma.get(0, cfg.max_generation)).unwrap(),
+            distribution: rand_distr::Normal::new(0.0_f32, cfg.sigma.get(0, cfg.max_generation))
+                .unwrap(),
         };
-        let ctx = Context::<i64, (), ()>::new(&epoch, &None, &pools);
+        let ctx = Context::<i64, (), ()>::new(&gen_info, &None, &pools);
         let mut ind = Individual::<i64, ()>::firstborn(0, 0, vec![1, 2, 3]);
         ind.evaluate(&const_evaluate, &ctx);
         assert_that!(ind.fitness).is_equal_to(3.0);
@@ -74,12 +75,13 @@ mod tests {
     fn evaluate_is_idempotent() {
         let cfg = Config::<i64>::default();
         let pools = Pools::<i64, ()>::default();
-        let epoch = Epoch {
+        let gen_info = GenInfo {
             generation: 0,
             stagnation: 0.0,
-            normal: rand_distr::Normal::new(0.0_f32, cfg.sigma.get(0, cfg.max_generation)).unwrap(),
+            distribution: rand_distr::Normal::new(0.0_f32, cfg.sigma.get(0, cfg.max_generation))
+                .unwrap(),
         };
-        let ctx = Context::<i64, (), ()>::new(&epoch, &None, &pools);
+        let ctx = Context::<i64, (), ()>::new(&gen_info, &None, &pools);
         let mut ind = Individual::<i64, ()>::firstborn(0, 0, vec![1, 2, 3]);
         ind.evaluate(&const_evaluate, &ctx);
         assert_that!(ind.fitness).is_equal_to(3.0);

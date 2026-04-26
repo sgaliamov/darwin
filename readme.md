@@ -63,13 +63,13 @@ let ranges = vec![
 
 Implement these traits (or pass closures — blanket impls exist for `Fn`):
 
-| Trait | Method | Purpose |
-|-------|--------|---------|
-| `Generator` | `generate(ctx) → Genome` | Random genome creation |
-| `Mutator` | `mutant(individual, ctx) → Option<Genome>` | Mutation; `None` = out of range |
-| `Crossover` | `cross(dad, mom, ctx) → Vec<Genome>` | Recombination |
-| `Scorer` | `evaluate(individual, ctx) → (f64, Option<IndState>)` | Fitness function |
-| `Callback` | `call(ctx)` | Per-generation reporting |
+| Trait       | Method                                                | Purpose                         |
+| ----------- | ----------------------------------------------------- | ------------------------------- |
+| `Generator` | `generate(ctx) → Genome`                              | Random genome creation          |
+| `Mutator`   | `mutant(individual, ctx) → Option<Genome>`            | Mutation; `None` = out of range |
+| `Crossover` | `cross(dad, mom, ctx) → Vec<Genome>`                  | Recombination                   |
+| `Scorer`    | `evaluate(individual, ctx) → (f64, Option<IndState>)` | Fitness function                |
+| `Callback`  | `call(ctx)`                                           | Per-generation reporting        |
 
 All traits require `Send + Sync` for parallel execution. No-op implementations (`NoopGenerator`, `NoopMutator`, `NoopCrossover`, `NoopScorer`, `NoopCallback`) are provided.
 
