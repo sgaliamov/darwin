@@ -1,10 +1,10 @@
 [package]
 edition = "2024"
 name = "darwin"
-version = "0.0.12"
+version = "0.1.0"
 description = "Domain agnostic genetic algorithm implementation."
 license = "MIT"
-repository = "https://github.com/your-username/darwin"
+repository = "https://github.com/sgaliamov/darwin"
 readme = "readme.md"
 keywords = ["genetic-algorithm", "evolutionary", "optimization"]
 categories = ["algorithms", "science"]

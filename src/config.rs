@@ -1,14 +1,16 @@
-use crate::{GeneRanges, Genome};
+use crate::{Gene, Genome, RangeSet, Sigma};
 use serde::Deserialize;
 
-// tbd: [future, ga] type of ranges can be generic.
-//      it will allow to define them in domain-specific way, like percentages, time intervals, etc.
 /// Generic settings for any genetic algorithms.
-#[derive(Debug, Clone, Deserialize, PartialEq)]
-#[serde(rename_all = "camelCase", default)]
-pub struct Config {
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(
+    rename_all = "camelCase",
+    default,
+    bound(deserialize = "G: serde::de::DeserializeOwned")
+)]
+pub struct Config<G: Gene> {
     /// Defines amount of genes and their ranges.
-    pub ranges: Vec<GeneRanges>,
+    pub ranges: RangeSet<G>,
 
     /// How many mutants will be generated from top individuals.
     pub mutation_ratio: f32,
@@ -23,14 +25,6 @@ pub struct Config {
 
     /// Hard cap on generations. Bounds runtime even when the fitness plateaus.
     pub max_generation: usize,
-
-    /// Lower bound for `mutation_sigma` reached linearly at `max_generations`. A
-    /// small, non-zero sigma keeps the walk from freezing completely.
-    pub min_mutation_sigma: f32,
-
-    /// Initial standard deviation for Gaussian mutation noise applied to gene
-    /// values.
-    pub max_mutation_sigma: f32,
 
     /// Number of isolated sub-populations evolved in parallel. Migration
     /// is implemented explicitly via `immigration_ratio` and crossover between
@@ -52,40 +46,29 @@ pub struct Config {
     /// Fraction of each pool replaced by round-robin crossover offspring.
     pub crossover_ratio: f32,
 
-    /// Relative amount of mutation noise added *after* crossover.
-    pub mutation_noise_factor: f32,
-
     /// Predefined seed.
-    pub seed: Vec<Genome>,
+    pub seed: Vec<Genome<G>>,
 
     /// Defines how children are distributed between parent's pools.
     /// 0 - all goes to dad, 1 - all goes to mom.
     pub migration_factor: f64,
+
+    /// Sigma annealing schedule; shared across all operators.
+    pub sigma: Sigma,
 }
 
-impl Config {
-    /// Mutation sigma decreases linearly from `max_mutation_sigma` to
-    /// `min_mutation_sigma` over the run. Simulates a simple annealing schedule.
-    pub fn sigma(&self, generation: usize) -> f32 {
-        let step =
-            (self.max_mutation_sigma - self.min_mutation_sigma) / (self.max_generation - 1) as f32;
-
-        let sigma = self.max_mutation_sigma - step * generation as f32;
-
-        sigma.max(self.min_mutation_sigma)
-    }
-
-    pub fn mutant_count(&self) -> usize {
+impl<G: Gene> Config<G> {
+    pub fn mutants_count(&self) -> usize {
         (self.population_size as f32 * self.mutation_ratio)
             .ceil()
             .max(1.0) as usize
     }
 }
 
-impl Default for Config {
+impl<G: Gene> Default for Config<G> {
     fn default() -> Self {
         Self {
-            ranges: Default::default(), // need to be defined explicitly
+            ranges: Default::default(),
             mutation_ratio: 0.2,
             crossover_ratio: 0.2,
             random_ratio: 0.25,
@@ -93,17 +76,14 @@ impl Default for Config {
             stagnation_count: 100,
             pools: 16,
             population_size: 128,
-            max_mutation_sigma: 3.0,
-            min_mutation_sigma: 1.0,
-            mutation_noise_factor: 1.0,
             tournament_size: 4,
             bests: 5,
             seed: Default::default(),
-            // tbd: [future, ga] find a better default, now it looks like, that 0 is the best.
-            //      moving all children to one parent pool allows to use seed safely,
-            //      as it won't affect other pools.
-            //      need to collect all linage to see how migration happens.
+            // moving all children to one parent pool allows to use seed safely,
+            // as it won't affect other pools.
+            // need to collect all linage to see how migration happen;
             migration_factor: 0.000_000_1,
+            sigma: Sigma::default(),
         }
     }
 }
@@ -116,11 +96,47 @@ mod tests {
 
     #[test]
     fn test_defaults_from_empty_json() {
-        let config: Config =
+        let config: Config<i64> =
             serde_json::from_value(json!({})).expect("failed to deserialize empty JSON");
 
         asserting("default values match")
             .that(&config)
             .is_equal_to(Config::default());
+    }
+
+    /// `mutant_count` = ceil(population_size * mutation_ratio), min 1.
+    #[test]
+    fn mutant_count_rounds_up() {
+        let cfg = Config::<i64> {
+            population_size: 10,
+            mutation_ratio: 0.15, // 10 * 0.15 = 1.5 → ceil = 2
+            ..Default::default()
+        };
+        assert_that!(cfg.mutants_count()).is_equal_to(2);
+    }
+
+    /// Partial JSON overrides only specified fields; rest stay default.
+    #[test]
+    fn partial_json_overrides_fields() {
+        let config: Config<i64> = serde_json::from_value(json!({
+            "maxGeneration": 42,
+            "pools": 3
+        }))
+        .unwrap();
+        assert_that!(config.max_generation).is_equal_to(42);
+        assert_that!(config.pools).is_equal_to(3);
+        assert_that!(config.population_size).is_equal_to(Config::<i64>::default().population_size);
+    }
+
+    /// Seed round-trips through JSON.
+    #[test]
+    fn seed_deserializes_from_json() {
+        let config: Config<i64> = serde_json::from_value(json!({
+            "ranges": [[[0, 9]]],
+            "seed": [[1, 2, 3]]
+        }))
+        .unwrap();
+        assert_that!(config.seed).has_length(1);
+        assert_that!(config.seed[0]).is_equal_to(vec![1i64, 2, 3]);
     }
 }
