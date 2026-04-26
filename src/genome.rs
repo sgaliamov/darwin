@@ -1,10 +1,9 @@
 use std::fmt::Debug;
-use std::ops::Sub;
 
 /// Core constraint for gene values.
 /// Integer-like types: ordered, subtractable, and castable to `f64`.
 /// Arithmetic beyond subtraction belongs to the evolution implementations.
-pub trait Gene: Copy + Ord + Sub<Output = Self> + Debug + Send + Sync + 'static {
+pub trait Gene: Copy + Ord + Debug + Send + Sync + 'static {
     fn to_f64(self) -> f64;
 }
 

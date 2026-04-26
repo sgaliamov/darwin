@@ -80,7 +80,7 @@ impl<G: Gene, State> Pool<G, State> {
             .filter_map(|gn_idx| {
                 let range = ranges[gn_idx];
                 let (min, max) = (range.0, range.1);
-                let span = (max - min).to_f64();
+                let span = max.to_f64() - min.to_f64();
 
                 // Skip constant genes (zero span) - they contribute nothing to diversity
                 if span == 0.0 {
@@ -93,7 +93,7 @@ impl<G: Gene, State> Pool<G, State> {
                     .fold((0_f64, 0_f64), |(s, ss), ind| {
                         debug_assert!((min..=max).contains(&ind.genome[gn_idx]));
 
-                        let x = (ind.genome[gn_idx] - min).to_f64() / span;
+                        let x = (ind.genome[gn_idx].to_f64() - min.to_f64()) / span;
                         debug_assert!((0.0..=1.0).contains(&x));
 
                         (s + x, ss + x * x)
