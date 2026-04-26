@@ -1,4 +1,3 @@
-// todo: [ga] keep UID for each individual and use here to track parents.
 #[derive(Clone, Debug)]
 pub enum Lineage {
     /// Randomly generated.

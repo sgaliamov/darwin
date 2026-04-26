@@ -117,16 +117,12 @@ where
                 .sigma
                 .get(generation, self.config.max_generation);
 
-            let epoch = Epoch {
-                generation,
-                stagnation,
-                normal: Normal::new(0.0_f32, sigma).expect("`sigma` must be positive"),
-            };
+            let normal = Normal::new(0.0_f32, sigma).expect("`sigma` must be positive");
 
-            self.mutate(epoch);
-            self.recombine(epoch);
-            self.random(epoch);
-            self.evaluate_generation(epoch);
+            self.mutate(generation, stagnation, normal);
+            self.recombine(generation, stagnation, normal);
+            self.random(generation, stagnation, normal);
+            self.evaluate_generation(generation, stagnation, normal);
 
             let improved = self
                 .pools
@@ -137,7 +133,8 @@ where
                 self.best_fitness = self.pools.best().unwrap().1;
             }
 
-            let ctx = Context::new(epoch, &self.state, &self.pools);
+            let epoch = Epoch { generation, stagnation, normal, state: &self.state };
+            let ctx = Context::new(&epoch, &self.pools);
             self.callback.call(&ctx);
 
             if self.stagnation(improved) {
@@ -163,7 +160,8 @@ where
     /// Evaluate all individuals (parallel) and sort each pool descending by
     /// fitness. Truncate back to `population_size` in case parents + offspring
     /// exceeded the limit.
-    fn evaluate_generation(&mut self, epoch: Epoch) {
+    fn evaluate_generation(&mut self, generation: usize, stagnation: f32, normal: Normal<f32>) {
+        let epoch = Epoch { generation, stagnation, normal, state: &self.state };
         let config = self.config;
         let flat_genome = &self.flat_genome;
         let population_size = config.population_size;
@@ -173,14 +171,13 @@ where
 
         // Phase 2: score unscored individuals — immutable borrow lets ctx hold &pools.
         let scores: Vec<Vec<(usize, f64, Option<IndState>)>> = {
-            let state = &self.state;
             let scorer = &self.scorer;
             let pools = &self.pools;
 
             pools
                 .par_iter()
                 .map(|pool| {
-                    let ctx = Context::new(epoch, state, pools);
+                    let ctx = Context::new(&epoch, pools);
                     pool.individuals
                         .par_iter()
                         .enumerate()
@@ -214,12 +211,11 @@ where
     }
 
     /// Spawn elite mutants inside every pool.
-    fn mutate(&mut self, epoch: Epoch) {
+    fn mutate(&mut self, generation: usize, stagnation: f32, normal: Normal<f32>) {
+        let epoch = Epoch { generation, stagnation, normal, state: &self.state };
         let evolver = &self.mutator;
         let mutant_count = self.mutant_count;
-        let state = &self.state;
         let pools = &self.pools;
-        let Epoch { generation, .. } = epoch;
 
         let mutants: Vec<(usize, Vec<Individual<G, IndState>>)> = self
             .pools
@@ -228,7 +224,7 @@ where
             .filter(|(_, pool)| !pool.individuals.is_empty())
             .map(|(idx, pool)| {
                 let m = mutant_count.min(pool.individuals.len());
-                let ctx = Context::new(epoch, state, pools);
+                let ctx = Context::new(&epoch, pools);
                 let new_mutants = pool.individuals[..m]
                     .iter()
                     .filter_map(|parent| {
@@ -251,8 +247,7 @@ where
 
     /// Recombine pools into offspring, possibly mutate, then migrate them.
     /// Short story: pair pools, breed `crossover_size` times, push kids to a chosen pool.
-    fn recombine(&mut self, epoch: Epoch) {
-        let Epoch { generation, .. } = epoch;
+    fn recombine(&mut self, generation: usize, stagnation: f32, normal: Normal<f32>) {
         let Self {
             pools,
             crossover_size,
@@ -263,12 +258,12 @@ where
             ..
         } = self;
 
+        let epoch = Epoch { generation, stagnation, normal, state: &*state };
         let crossover_size = *crossover_size;
         let tournament_size = config.tournament_size;
         let mutant_count = *mutant_count;
         // Coerce to shared ref so the closure is Sync.
         let crossover: &C = crossover;
-        let state: &Option<GaState> = state;
 
         let offspring: Vec<_> = pools
             .pairs(generation)
@@ -294,7 +289,7 @@ where
                         for g in crossover.cross(
                             dad,
                             mom,
-                            &Context::new(epoch, state, &*pools),
+                            &Context::new(&epoch, &*pools),
                         ) {
                             kids.push(Individual::new(
                                 g,
@@ -329,8 +324,8 @@ where
 
     /// Restore populations size to the original with random immigrants.
     /// May overpopulate.
-    fn random(&mut self, epoch: Epoch) {
-        let Epoch { generation, .. } = epoch;
+    fn random(&mut self, generation: usize, stagnation: f32, normal: Normal<f32>) {
+        let epoch = Epoch { generation, stagnation, normal, state: &self.state };
         let quota = self.immigrant_count;
         // have to make the first generation bigger, as many individuals are not valid.
         // ideally generation method should be delegated to a client and he could ensure,
@@ -342,7 +337,6 @@ where
         };
 
         let evolver = &self.generator;
-        let state = &self.state;
         let pools = &self.pools;
 
         let immigrants: Vec<(usize, Vec<Individual<G, IndState>>)> = self
@@ -353,7 +347,7 @@ where
                 let current_cnt = pool.individuals.len();
                 let deficit = target.saturating_sub(current_cnt);
                 let count = quota.max(deficit);
-                let ctx = Context::new(epoch, state, pools);
+                let ctx = Context::new(&epoch, pools);
 
                 let new_individuals = std::iter::repeat_with(|| {
                     Individual::firstborn(idx, generation, evolver.generate(&ctx))
