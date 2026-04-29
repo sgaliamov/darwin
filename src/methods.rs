@@ -1,6 +1,6 @@
 use crate::{
-    Callback, Config, Context, Crossover, GenInfo, Gene, Generator, GeneticAlgorithm, Individual,
-    Lineage, Mutator, Pool, Pools, Evaluator,
+    Callback, Config, Context, Crossover, Evaluator, GenInfo, Gene, Generator, GeneticAlgorithm,
+    Individual, Lineage, Mutator, Pool, Pools,
 };
 use itertools::Itertools;
 use rand::prelude::*;
