@@ -167,7 +167,7 @@ where
         // Phase 1: remove duplicates before scoring.
         self.pools.par_iter_mut().for_each(|pool| pool.dedup());
 
-        // Phase 2: score unscored individuals.
+        // Phase 2: score un-scored individuals.
         let evaluator = &self.evaluator;
         let ctx = Context::new(gen_info, &self.state, &self.pools);
         let scores: Vec<Vec<(usize, f64, Option<IndState>)>> = self
@@ -210,6 +210,7 @@ where
         let mutator = &self.mutator;
         let mutant_count = self.mutant_count;
         let ctx = Context::new(gen_info, &self.state, &self.pools);
+
         let mutants = self
             .pools
             .par_iter()
