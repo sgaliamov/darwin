@@ -1,11 +1,12 @@
 use crate::{
     Callback, Config, Context, Crossover, Evaluator, GenInfo, Gene, Generator, GeneticAlgorithm,
-    Individual, Lineage, Mutator, Pool, Pools,
+    Individual, Lineage, Mutator, NoopCrossover, Pool, Pools,
 };
 use itertools::Itertools;
 use rand::prelude::*;
 use rand_distr::Normal;
 use rayon::prelude::*;
+use std::any::TypeId;
 
 impl<'a, G, GaState, IndState, Gen, M, C, Sc, Cb>
     GeneticAlgorithm<'a, G, GaState, IndState, Gen, M, C, Sc, Cb>
@@ -15,7 +16,7 @@ where
     IndState: Send + Sync,
     Gen: Generator<G, GaState, IndState>,
     M: Mutator<G, GaState, IndState>,
-    C: Crossover<G, GaState, IndState>,
+    C: Crossover<G, GaState, IndState> + 'static,
     Sc: Evaluator<G, GaState, IndState>,
     Cb: Callback<G, GaState, IndState>,
 {
@@ -48,9 +49,11 @@ where
             .ceil()
             .max(1.0) as usize;
 
-        let crossover_size = (config.population_size as f32 * config.crossover_ratio)
-            .ceil()
-            .max(1.0) as usize;
+        let crossover_size = if TypeId::of::<C>() == TypeId::of::<NoopCrossover>() {
+            0
+        } else {
+            (config.population_size as f32 * config.crossover_ratio).ceil() as usize
+        };
 
         let flat_genome = config.ranges.iter().flatten().cloned().collect_vec();
 
@@ -240,6 +243,9 @@ where
     /// Recombine pools into offspring, possibly mutate, then migrate them.
     /// Short story: pair pools, breed `crossover_size` times, push kids to a chosen pool.
     fn recombine(&mut self, gen_info: &GenInfo) {
+        if self.crossover_size == 0 {
+            return;
+        }
         let crossover: &C = &self.crossover;
         let crossover_size = self.crossover_size;
         let mutant_count = self.mutant_count;
