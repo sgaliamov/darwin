@@ -1,12 +1,14 @@
 use crate::{
-    Callback, Config, Context, Crossover, GenInfo, Gene, Generator, GeneticAlgorithm, Individual,
-    Lineage, Mutator, Pool, Pools, Evaluator,
+    Callback, Config, Context, Crossover, Evaluator, GenInfo, Gene, Generator, GeneticAlgorithm,
+    Individual, Lineage, Mutator, NoopCrossover, Pool, Pools,
 };
 use itertools::Itertools;
 use rand::prelude::*;
 use rand_distr::Normal;
 use rayon::prelude::*;
+use std::any::TypeId;
 
+// todo: remove livetime parameter and use owned Config, as it is not modified and cheap to clone.
 impl<'a, G, GaState, IndState, Gen, M, C, Sc, Cb>
     GeneticAlgorithm<'a, G, GaState, IndState, Gen, M, C, Sc, Cb>
 where
@@ -15,7 +17,7 @@ where
     IndState: Send + Sync,
     Gen: Generator<G, GaState, IndState>,
     M: Mutator<G, GaState, IndState>,
-    C: Crossover<G, GaState, IndState>,
+    C: Crossover<G, GaState, IndState> + 'static,
     Sc: Evaluator<G, GaState, IndState>,
     Cb: Callback<G, GaState, IndState>,
 {
@@ -48,19 +50,21 @@ where
             .ceil()
             .max(1.0) as usize;
 
-        let crossover_size = (config.population_size as f32 * config.crossover_ratio)
-            .ceil()
-            .max(1.0) as usize;
+        let crossover_size = if TypeId::of::<C>() == TypeId::of::<NoopCrossover>() {
+            0
+        } else {
+            (config.population_size as f32 * config.crossover_ratio).ceil() as usize
+        };
 
-        let flat_genome = config.ranges.iter().flatten().cloned().collect_vec();
+        let flat_genome_ranges = config.ranges.iter().flatten().cloned().collect_vec();
 
         // Each seed genome goes to a pool in round-robin fashion.
         if !config.seed.is_empty() {
             for (i, genome) in config.seed.iter().cloned().enumerate() {
                 assert!(
-                    genome.len() == flat_genome.len(),
+                    genome.len() == flat_genome_ranges.len(),
                     "seed genome length mismatch: expected {}, got {}",
-                    flat_genome.len(),
+                    flat_genome_ranges.len(),
                     genome.len()
                 );
                 let pool_idx = i % pools.len();
@@ -74,12 +78,12 @@ where
                 .iter_mut()
                 .filter(|p| !p.individuals.is_empty())
                 .for_each(|p| {
-                    p.calc_diversity(&flat_genome);
+                    p.calc_diversity(&flat_genome_ranges);
                 });
         }
 
         Self {
-            flat_genome,
+            flat_genome_ranges,
             evaluator,
             callback,
             state: None,
@@ -135,7 +139,9 @@ where
             }
 
             let ctx = Context::new(&gen_info, &self.state, &self.pools);
-            self.callback.call(&ctx);
+            if !self.callback.call(&ctx) {
+                break;
+            }
 
             if self.stagnation(improved) {
                 break;
@@ -164,7 +170,7 @@ where
         // Phase 1: remove duplicates before scoring.
         self.pools.par_iter_mut().for_each(|pool| pool.dedup());
 
-        // Phase 2: score unscored individuals.
+        // Phase 2: score un-scored individuals.
         let evaluator = &self.evaluator;
         let ctx = Context::new(gen_info, &self.state, &self.pools);
         let scores: Vec<Vec<(usize, f64, Option<IndState>)>> = self
@@ -198,7 +204,7 @@ where
                 .sort_unstable_by(|a, b| b.fitness.total_cmp(&a.fitness));
             pool.individuals.truncate(self.config.population_size);
             // diversity need to be updated before callback to provide actual state.
-            pool.calc_diversity(&self.flat_genome);
+            pool.calc_diversity(&self.flat_genome_ranges);
         });
     }
 
@@ -207,6 +213,7 @@ where
         let mutator = &self.mutator;
         let mutant_count = self.mutant_count;
         let ctx = Context::new(gen_info, &self.state, &self.pools);
+
         let mutants = self
             .pools
             .par_iter()
@@ -240,6 +247,9 @@ where
     /// Recombine pools into offspring, possibly mutate, then migrate them.
     /// Short story: pair pools, breed `crossover_size` times, push kids to a chosen pool.
     fn recombine(&mut self, gen_info: &GenInfo) {
+        if self.crossover_size == 0 {
+            return;
+        }
         let crossover: &C = &self.crossover;
         let crossover_size = self.crossover_size;
         let mutant_count = self.mutant_count;
@@ -300,6 +310,7 @@ where
     /// May overpopulate.
     fn random(&mut self, gen_info: &GenInfo) {
         let quota = self.immigrant_count;
+        // todo: why overseed?
         // Generation 0: overseed so the evaluator has enough valid individuals to work with.
         let target = if gen_info.generation == 0 {
             self.config.population_size * 10

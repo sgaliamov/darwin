@@ -15,11 +15,7 @@ impl<'a, G: Gene, GaState, IndState> Context<'a, G, GaState, IndState> {
         state: &'a Option<GaState>,
         pools: &'a Pools<G, IndState>,
     ) -> Self {
-        Self {
-            info,
-            state,
-            pools,
-        }
+        Self { info, state, pools }
     }
 }
 

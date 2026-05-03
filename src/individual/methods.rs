@@ -1,4 +1,4 @@
-use crate::{Context, Gene, Genome, Individual, Lineage, Evaluator};
+use crate::{Context, Evaluator, Gene, Genome, Individual, Lineage};
 
 impl<G, IndState> Individual<G, IndState> {
     /// Name without genome.

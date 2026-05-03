@@ -65,22 +65,22 @@ impl<G: Gene, State> Pool<G, State> {
     /// Average variance over loci.
     /// Result varies from 0.0 (no diversity) to 1.0 (all different).
     /// Need to be calculated after all changes with the pool.
-    pub fn calc_diversity(&mut self, ranges: GeneRangesRef<G>) -> f32 {
+    pub fn calc_diversity(&mut self, flat_ranges: GeneRangesRef<G>) -> f32 {
         let n = self.individuals.len() as f64;
         if n == 0.0 {
             return 0.0;
         }
 
-        let loci = ranges.len();
+        let loci = flat_ranges.len();
         if loci == 0 {
             return 0.0;
         }
 
         let variances: Vec<f64> = (0..loci)
             .filter_map(|gn_idx| {
-                let range = ranges[gn_idx];
+                let range = flat_ranges[gn_idx];
                 let (min, max) = (range.0, range.1);
-                let span = (max - min).to_f64();
+                let span = max.to_f64() - min.to_f64();
 
                 // Skip constant genes (zero span) - they contribute nothing to diversity
                 if span == 0.0 {
@@ -93,7 +93,7 @@ impl<G: Gene, State> Pool<G, State> {
                     .fold((0_f64, 0_f64), |(s, ss), ind| {
                         debug_assert!((min..=max).contains(&ind.genome[gn_idx]));
 
-                        let x = (ind.genome[gn_idx] - min).to_f64() / span;
+                        let x = (ind.genome[gn_idx].to_f64() - min.to_f64()) / span;
                         debug_assert!((0.0..=1.0).contains(&x));
 
                         (s + x, ss + x * x)

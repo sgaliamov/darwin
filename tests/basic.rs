@@ -23,7 +23,7 @@ mod tests {
         (score, Some(()))
     }
 
-    fn callback_fn(ctx: &Context<'_, i64, State<'_>, ()>) {
+    fn callback_fn(ctx: &Context<'_, i64, State<'_>, ()>) -> bool {
         let (config, writer) = ctx.state.as_ref().unwrap();
         let mut writer = writer.lock().unwrap();
         let g = ctx.generation;
@@ -51,6 +51,7 @@ mod tests {
         }
 
         writer.write_all("\n".as_bytes()).unwrap();
+        true
     }
 
     #[test]
