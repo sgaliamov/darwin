@@ -43,8 +43,8 @@ pub trait Evaluator<G: Gene, GaState, IndState>: Send + Sync {
 
 /// Reports progress after each generation; must be `Send + Sync` for Rayon sharing.
 pub trait Callback<G: Gene, GaState, IndState>: Send + Sync {
-    /// Called once per generation with context and all pools.
-    fn call(&self, ctx: &Context<'_, G, GaState, IndState>);
+    /// Called once per generation with context and all pools. Return `false` to stop early.
+    fn call(&self, ctx: &Context<'_, G, GaState, IndState>) -> bool;
 }
 
 // ---------------------------------------------------------------------------
@@ -117,9 +117,9 @@ where
 impl<G, GaState, IndState, F> Callback<G, GaState, IndState> for F
 where
     G: Gene,
-    F: Fn(&Context<'_, G, GaState, IndState>) + Send + Sync,
+    F: Fn(&Context<'_, G, GaState, IndState>) -> bool + Send + Sync,
 {
-    fn call(&self, ctx: &Context<'_, G, GaState, IndState>) {
+    fn call(&self, ctx: &Context<'_, G, GaState, IndState>) -> bool {
         self(ctx)
     }
 }
@@ -172,5 +172,7 @@ impl<G: Gene, GaState, IndState> Evaluator<G, GaState, IndState> for NoopEvaluat
 pub struct NoopCallback;
 
 impl<G: Gene, GaState, IndState> Callback<G, GaState, IndState> for NoopCallback {
-    fn call(&self, _: &Context<'_, G, GaState, IndState>) {}
+    fn call(&self, _: &Context<'_, G, GaState, IndState>) -> bool {
+        true
+    }
 }

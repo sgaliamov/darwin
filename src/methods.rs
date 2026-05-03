@@ -138,7 +138,9 @@ where
             }
 
             let ctx = Context::new(&gen_info, &self.state, &self.pools);
-            self.callback.call(&ctx);
+            if !self.callback.call(&ctx) {
+                break;
+            }
 
             if self.stagnation(improved) {
                 break;
