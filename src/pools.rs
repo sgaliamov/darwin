@@ -88,17 +88,26 @@ impl<G, IndState> Pools<G, IndState> {
             .collect()
     }
 
-    /// Best individual across all pools: cloned genome + fitness.
-    /// Returns `None` if all pools are empty.
-    pub fn best(&self) -> Option<(&Genome<G>, f64)>
+    /// Top `n` individuals across all pools sorted best-first.
+    pub fn best_n(&self, n: usize) -> Vec<(&Genome<G>, f64)>
     where
         G: Gene,
     {
         self.iter()
             .flat_map(|pool| pool.individuals.iter())
             .filter(|ind| ind.fitness.is_finite())
-            .max_by(|a, b| a.fitness.total_cmp(&b.fitness))
+            .sorted_by(|a, b| b.fitness.total_cmp(&a.fitness))
+            .take(n)
             .map(|ind| (&ind.genome, ind.fitness))
+            .collect()
+    }
+
+    /// Best individual across all pools. Returns `None` if all pools are empty.
+    pub fn best(&self) -> Option<(&Genome<G>, f64)>
+    where
+        G: Gene,
+    {
+        self.best_n(1).into_iter().next()
     }
 }
 
