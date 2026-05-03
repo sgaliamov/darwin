@@ -17,6 +17,12 @@ impl_gene!(
     i8, i16, i32, i64, i128, isize, u8, u16, u32, u64, u128, usize
 );
 
+impl Gene for char {
+    fn to_f64(self) -> f64 {
+        self as u32 as f64
+    }
+}
+
 /// Flat DNA sequence.
 pub type Genome<G> = Vec<G>;
 
