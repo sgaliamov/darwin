@@ -60,7 +60,7 @@ where
     crossover: C,
 
     /// Flat genome ranges.
-    flat_genome: GeneRanges<G>,
+    flat_genome_ranges: GeneRanges<G>,
 
     // --- Cached scalars for quick access ------------------------------------
     mutant_count: usize,

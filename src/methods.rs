@@ -8,6 +8,7 @@ use rand_distr::Normal;
 use rayon::prelude::*;
 use std::any::TypeId;
 
+// todo: remove livetime parameter and use owned Config, as it is not modified and cheap to clone.
 impl<'a, G, GaState, IndState, Gen, M, C, Sc, Cb>
     GeneticAlgorithm<'a, G, GaState, IndState, Gen, M, C, Sc, Cb>
 where
@@ -55,15 +56,15 @@ where
             (config.population_size as f32 * config.crossover_ratio).ceil() as usize
         };
 
-        let flat_genome = config.ranges.iter().flatten().cloned().collect_vec();
+        let flat_genome_ranges = config.ranges.iter().flatten().cloned().collect_vec();
 
         // Each seed genome goes to a pool in round-robin fashion.
         if !config.seed.is_empty() {
             for (i, genome) in config.seed.iter().cloned().enumerate() {
                 assert!(
-                    genome.len() == flat_genome.len(),
+                    genome.len() == flat_genome_ranges.len(),
                     "seed genome length mismatch: expected {}, got {}",
-                    flat_genome.len(),
+                    flat_genome_ranges.len(),
                     genome.len()
                 );
                 let pool_idx = i % pools.len();
@@ -77,12 +78,12 @@ where
                 .iter_mut()
                 .filter(|p| !p.individuals.is_empty())
                 .for_each(|p| {
-                    p.calc_diversity(&flat_genome);
+                    p.calc_diversity(&flat_genome_ranges);
                 });
         }
 
         Self {
-            flat_genome,
+            flat_genome_ranges,
             evaluator,
             callback,
             state: None,
@@ -203,7 +204,7 @@ where
                 .sort_unstable_by(|a, b| b.fitness.total_cmp(&a.fitness));
             pool.individuals.truncate(self.config.population_size);
             // diversity need to be updated before callback to provide actual state.
-            pool.calc_diversity(&self.flat_genome);
+            pool.calc_diversity(&self.flat_genome_ranges);
         });
     }
 
@@ -309,6 +310,7 @@ where
     /// May overpopulate.
     fn random(&mut self, gen_info: &GenInfo) {
         let quota = self.immigrant_count;
+        // todo: why overseed?
         // Generation 0: overseed so the evaluator has enough valid individuals to work with.
         let target = if gen_info.generation == 0 {
             self.config.population_size * 10
