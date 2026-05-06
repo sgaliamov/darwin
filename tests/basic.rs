@@ -108,7 +108,7 @@ mod tests {
         let mutator = DefaultMutator::new(&ranges);
         let crossover = DefaultCrossover::new(&config.ranges);
         let mut ga = GeneticAlgorithm::<i64, (), (), _, _, _, _, _>::new(
-            &config,
+            config,
             generator,
             mutator,
             crossover,
@@ -142,7 +142,7 @@ mod tests {
         let mutator = DefaultMutator::new(&ranges);
         let crossover = DefaultCrossover::new(&config.ranges);
         let mut ga = GeneticAlgorithm::<i64, (), (), _, _, _, _, _>::new(
-            &config,
+            config,
             generator,
             mutator,
             crossover,
@@ -174,7 +174,7 @@ mod tests {
         let mutator = DefaultMutator::new(&ranges);
         let crossover = DefaultCrossover::new(&config.ranges);
         let mut ga = GeneticAlgorithm::<i64, (), (), _, _, _, _, _>::new(
-            &config,
+            config,
             generator,
             mutator,
             crossover,
@@ -229,8 +229,14 @@ mod tests {
         let generator = DefaultGenerator::new(&ranges);
         let mutator = DefaultMutator::new(&ranges);
         let crossover = DefaultCrossover::new(&config.ranges);
-        let mut ga =
-            GeneticAlgorithm::new(&config, generator, mutator, crossover, sphere, callback_fn);
+        let mut ga = GeneticAlgorithm::new(
+            config.clone(),
+            generator,
+            mutator,
+            crossover,
+            sphere,
+            callback_fn,
+        );
         ga.set_state((&config, Mutex::new(writer)));
         let pools = ga.run();
         pools

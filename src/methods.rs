@@ -8,9 +8,8 @@ use rand_distr::Normal;
 use rayon::prelude::*;
 use std::any::TypeId;
 
-// todo: remove livetime parameter and use owned Config, as it is not modified and cheap to clone.
-impl<'a, G, GaState, IndState, Gen, M, C, Sc, Cb>
-    GeneticAlgorithm<'a, G, GaState, IndState, Gen, M, C, Sc, Cb>
+impl<G, GaState, IndState, Gen, M, C, Sc, Cb>
+    GeneticAlgorithm<G, GaState, IndState, Gen, M, C, Sc, Cb>
 where
     G: Gene,
     GaState: Sync,
@@ -22,7 +21,7 @@ where
     Cb: Callback<G, GaState, IndState>,
 {
     pub fn new(
-        config: &'a Config<G>,
+        config: Config<G>,
         generator: Gen,
         mutator: M,
         crossover: C,
@@ -253,7 +252,7 @@ where
         let crossover: &C = &self.crossover;
         let crossover_size = self.crossover_size;
         let mutant_count = self.mutant_count;
-        let config = self.config;
+        let config = &self.config;
         let pools: &Pools<G, IndState> = &self.pools;
         let ctx = Context::new(gen_info, &self.state, pools);
         let offspring: Vec<_> = pools

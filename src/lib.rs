@@ -21,7 +21,7 @@ pub use sigma::*;
 pub use traits::*;
 
 /// Evolution engine with independently injectable genome operations.
-pub struct GeneticAlgorithm<'a, G, GaState, IndState, Gr, M, C, E, Cb>
+pub struct GeneticAlgorithm<G, GaState, IndState, Gr, M, C, E, Cb>
 where
     G: Gene,
     Gr: Generator<G, GaState, IndState>,
@@ -31,7 +31,7 @@ where
     Cb: Callback<G, GaState, IndState>,
 {
     /// GA configuration.
-    config: &'a Config<G>,
+    config: Config<G>,
 
     /// All individuals across multiple pools.
     /// Pools are kept internally to allow reusing evolutionary state between runs—
