@@ -309,8 +309,10 @@ where
     /// May overpopulate.
     fn random(&mut self, gen_info: &GenInfo) {
         let quota = self.immigrant_count;
-        // todo: why overseed?
-        // Generation 0: overseed so the evaluator has enough valid individuals to work with.
+        // Generation 0: generate 10× more candidates than needed.
+        // Rationale: if the evaluator rejects many genomes (returns non-finite fitness),
+        // the pool would be near-empty after the retain step. Overseeding compensates
+        // by ensuring enough valid individuals survive into gen 1.
         let target = if gen_info.generation == 0 {
             self.config.population_size * 10
         } else {
