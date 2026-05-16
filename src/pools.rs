@@ -78,6 +78,25 @@ impl<G, IndState> Pools<G, IndState> {
         }
     }
 
+    /// Remove duplicates across all pools. Prefers already-scored individuals.
+    /// Iterates pools in order; first pool to claim a genome wins.
+    pub fn dedup(&mut self)
+    where
+        G: Gene,
+    {
+        // Within each pool: dedup, preferring scored individuals.
+        for pool in self.iter_mut() {
+            pool.dedup();
+        }
+
+        // Across pools: first pool to claim a genome keeps it; later pools drop it.
+        let mut seen = std::collections::BTreeSet::<Genome<G>>::new();
+        for pool in self.iter_mut() {
+            pool.individuals
+                .retain(|ind| seen.insert(ind.genome.clone()));
+        }
+    }
+
     /// Collect all individuals from all pools, sort by fitness (best-first),
     /// and return the top `count` mutable references.
     pub fn top_individuals_mut(&mut self, count: usize) -> Vec<&mut Individual<G, IndState>> {

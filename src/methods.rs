@@ -166,8 +166,8 @@ where
     /// fitness. Truncate back to `population_size` in case parents + offspring
     /// exceeded the limit.
     fn evaluate_generation(&mut self, gen_info: &GenInfo) {
-        // Phase 1: remove duplicates before scoring.
-        self.pools.par_iter_mut().for_each(|pool| pool.dedup());
+        // Phase 1: remove duplicates across all pools before scoring.
+        self.pools.dedup();
 
         // Phase 2: score un-scored individuals.
         let evaluator = &self.evaluator;
