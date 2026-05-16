@@ -224,15 +224,12 @@ where
                     .iter()
                     .flat_map(|parent| {
                         let parent_gen = parent.lineage.generation();
-                        mutator
-                            .mutant(parent, &ctx)
-                            .into_iter()
-                            .map(move |genome| {
-                                Individual::new(
-                                    genome,
-                                    Lineage::Mutant(idx, gen_info.generation, parent_gen),
-                                )
-                            })
+                        mutator.mutant(parent, &ctx).into_iter().map(move |genome| {
+                            Individual::new(
+                                genome,
+                                Lineage::Mutant(idx, gen_info.generation, parent_gen),
+                            )
+                        })
                     })
                     .collect_vec();
                 (idx, new_mutants)

@@ -28,7 +28,9 @@ where
         individual: &Individual<G, IndState>,
         ctx: &Context<'_, G, GaState, IndState>,
     ) -> Vec<Genome<G>> {
-        noisy_mutant(&self.ranges, individual, ctx, &mut rand::rng()).into_iter().collect()
+        noisy_mutant(&self.ranges, individual, ctx, &mut rand::rng())
+            .into_iter()
+            .collect()
     }
 }
 
