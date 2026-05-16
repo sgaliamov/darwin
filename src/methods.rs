@@ -222,16 +222,17 @@ where
                 let m = mutant_count.min(pool.individuals.len());
                 let new_mutants = pool.individuals[..m]
                     .iter()
-                    .filter_map(|parent| {
+                    .flat_map(|parent| {
+                        let parent_gen = parent.lineage.generation();
                         mutator
                             .mutant(parent, &ctx)
-                            .map(|genome| (genome, parent.lineage.generation()))
-                    })
-                    .map(|(genome, parent_gen)| {
-                        Individual::new(
-                            genome,
-                            Lineage::Mutant(idx, gen_info.generation, parent_gen),
-                        )
+                            .into_iter()
+                            .map(move |genome| {
+                                Individual::new(
+                                    genome,
+                                    Lineage::Mutant(idx, gen_info.generation, parent_gen),
+                                )
+                            })
                     })
                     .collect_vec();
                 (idx, new_mutants)
