@@ -36,7 +36,7 @@ where
         assert!(!config.ranges.is_empty(), "At least one gene is required");
         assert!(config.population_size >= 4, "Population too small");
 
-        let mut pools = Pools::from_vec(
+        let pools = Pools::from_vec(
             (0..config.pools)
                 .map(|number| Pool::new(number, Vec::with_capacity(config.population_size)))
                 .collect_vec(),
@@ -56,25 +56,6 @@ where
         };
 
         let flat_genome_ranges = config.ranges.iter().flatten().cloned().collect_vec();
-        let seed_genomes = Self::seed_genomes(&config, &mutator, &pools, flat_genome_ranges.len());
-
-        // Each seed genome goes to a pool in round-robin fashion.
-        if !seed_genomes.is_empty() {
-            for (i, genome) in seed_genomes.into_iter().enumerate() {
-                let pool_idx = i % pools.len();
-                pools[pool_idx]
-                    .individuals
-                    .push(Individual::firstborn(pool_idx, 0, genome));
-            }
-
-            // Recalculate diversity for all seeded pools
-            pools
-                .iter_mut()
-                .filter(|p| !p.individuals.is_empty())
-                .for_each(|p| {
-                    p.calc_diversity(&flat_genome_ranges);
-                });
-        }
 
         Self {
             flat_genome_ranges,
@@ -97,6 +78,21 @@ where
     /// Optional external state can be set for use in `evaluator` and `callback`.
     pub fn set_state(&mut self, state: GaState) {
         self.state = Some(state);
+    }
+
+    /// Seed pools from configured genomes, optionally using state-aware mutation.
+    pub fn seed(&mut self)
+    where
+        GaState: Clone,
+    {
+        let seed_genomes = Self::seed_genomes(
+            &self.config,
+            self.state.clone(),
+            self.state.as_ref().map(|_| &self.mutator),
+            &self.pools,
+            self.flat_genome_ranges.len(),
+        );
+        self.reseed(seed_genomes);
     }
 
     /// Expose pools for inspection between runs.
@@ -356,7 +352,8 @@ where
     /// Expand configured seeds before generation 0.
     fn seed_genomes(
         config: &Config<G>,
-        mutator: &M,
+        state: Option<GaState>,
+        mutator: Option<&M>,
         pools: &Pools<G, IndState>,
         genome_len: usize,
     ) -> Vec<Vec<G>> {
@@ -370,7 +367,6 @@ where
             distribution: Normal::new(0.0_f32, config.sigma.get(0, config.max_generation))
                 .expect("`sigma` must be positive"),
         };
-        let state = None;
         let ctx = Context::new(&gen_info, &state, pools);
 
         let mut accepted = Vec::new();
@@ -386,6 +382,14 @@ where
                 }
                 continue;
             }
+
+            let Some(mutator) = mutator else {
+                if !accepted.contains(&genome) {
+                    accepted.push(genome.clone());
+                    seeds.push(genome);
+                }
+                continue;
+            };
 
             let individual = Individual::<G, IndState>::firstborn(0, 0, genome.clone());
             let mutants = mutator
@@ -407,6 +411,27 @@ where
         }
 
         seeds
+    }
+
+    /// Replace current pool seeds with provided genomes and refresh diversity.
+    fn reseed(&mut self, seed_genomes: Vec<Vec<G>>) {
+        self.pools
+            .iter_mut()
+            .for_each(|pool| pool.individuals.clear());
+
+        for (i, genome) in seed_genomes.into_iter().enumerate() {
+            let pool_idx = i % self.pools.len();
+            self.pools[pool_idx]
+                .individuals
+                .push(Individual::firstborn(pool_idx, 0, genome));
+        }
+
+        self.pools
+            .iter_mut()
+            .filter(|p| !p.individuals.is_empty())
+            .for_each(|p| {
+                p.calc_diversity(&self.flat_genome_ranges);
+            });
     }
 
     /// Seed genomes must match flattened ranges.

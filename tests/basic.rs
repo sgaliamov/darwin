@@ -210,7 +210,8 @@ mod tests {
             ..Default::default()
         };
 
-        let ga = seed_ga(config, SeedMutator::new(vec![vec![9, 9]]));
+        let mut ga = seed_ga(config, SeedMutator::new(vec![vec![9, 9]]));
+        ga.seed();
         let seeded = ga.pools()[0]
             .individuals
             .iter()
@@ -233,10 +234,12 @@ mod tests {
             ..Default::default()
         };
 
-        let ga = seed_ga(
+        let mut ga = seed_ga(
             config,
             SeedMutator::new(vec![vec![1, 2], vec![3, 4], vec![3, 4], vec![5, 6]]),
         );
+        ga.set_state(());
+        ga.seed();
         let genomes = ga.pools()[0]
             .individuals
             .iter()
@@ -260,10 +263,12 @@ mod tests {
             ..Default::default()
         };
 
-        let ga = seed_ga(
+        let mut ga = seed_ga(
             config,
             SeedMutator::new(vec![vec![3, 4], vec![3, 4], vec![5, 6]]),
         );
+        ga.set_state(());
+        ga.seed();
         let genomes = ga.pools()[0]
             .individuals
             .iter()
