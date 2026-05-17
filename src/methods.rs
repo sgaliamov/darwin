@@ -56,16 +56,11 @@ where
         };
 
         let flat_genome_ranges = config.ranges.iter().flatten().cloned().collect_vec();
+        let seed_genomes = Self::seed_genomes(&config, &mutator, &pools, flat_genome_ranges.len());
 
         // Each seed genome goes to a pool in round-robin fashion.
-        if !config.seed.is_empty() {
-            for (i, genome) in config.seed.iter().cloned().enumerate() {
-                assert!(
-                    genome.len() == flat_genome_ranges.len(),
-                    "seed genome length mismatch: expected {}, got {}",
-                    flat_genome_ranges.len(),
-                    genome.len()
-                );
+        if !seed_genomes.is_empty() {
+            for (i, genome) in seed_genomes.into_iter().enumerate() {
                 let pool_idx = i % pools.len();
                 pools[pool_idx]
                     .individuals
@@ -102,6 +97,11 @@ where
     /// Optional external state can be set for use in `evaluator` and `callback`.
     pub fn set_state(&mut self, state: GaState) {
         self.state = Some(state);
+    }
+
+    /// Expose pools for inspection between runs.
+    pub fn pools(&self) -> &Pools<G, IndState> {
+        &self.pools
     }
 
     /// Run the evolutionary loop and return a mutable reference to all pools.
@@ -351,5 +351,71 @@ where
         }
 
         self.stagnation_counter >= self.config.stagnation_count
+    }
+
+    /// Expand configured seeds before generation 0.
+    fn seed_genomes(
+        config: &Config<G>,
+        mutator: &M,
+        pools: &Pools<G, IndState>,
+        genome_len: usize,
+    ) -> Vec<Vec<G>> {
+        if config.seed.is_empty() {
+            return Vec::new();
+        }
+
+        let gen_info = GenInfo {
+            generation: 0,
+            stagnation: 0.0,
+            distribution: Normal::new(0.0_f32, config.sigma.get(0, config.max_generation))
+                .expect("`sigma` must be positive"),
+        };
+        let state = None;
+        let ctx = Context::new(&gen_info, &state, pools);
+
+        let mut accepted = Vec::new();
+        let mut seeds = Vec::new();
+
+        for genome in config.seed.iter().cloned() {
+            Self::assert_seed_len(&genome, genome_len);
+
+            if config.seed_mutation == 0 {
+                if !accepted.contains(&genome) {
+                    accepted.push(genome.clone());
+                    seeds.push(genome);
+                }
+                continue;
+            }
+
+            let individual = Individual::<G, IndState>::firstborn(0, 0, genome.clone());
+            let mutants = mutator
+                .mutant(&individual, &ctx)
+                .into_iter()
+                .filter(|mutant| mutant != &genome)
+                .filter(|mutant| {
+                    Self::assert_seed_len(mutant, genome_len);
+                    if accepted.contains(mutant) {
+                        return false;
+                    }
+
+                    accepted.push(mutant.clone());
+                    true
+                })
+                .take(config.seed_mutation);
+
+            seeds.extend(mutants);
+        }
+
+        seeds
+    }
+
+    /// Seed genomes must match flattened ranges.
+    fn assert_seed_len(genome: &[G], expected: usize) {
+        assert!(
+            genome.len() == expected,
+            "seed genome length mismatch: expected {}, got {}",
+            expected,
+            genome.len()
+        );
     }
 }
