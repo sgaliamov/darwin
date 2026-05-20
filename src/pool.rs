@@ -19,6 +19,12 @@ impl<G, State> Pool<G, State> {
         }
     }
 
+    /// Remove all individuals and reset derived metrics.
+    pub fn clean(&mut self) {
+        self.individuals.clear();
+        self.diversity = f32::NAN;
+    }
+
     /// Returns current diversity value.
     pub fn diversity(&self) -> f32 {
         self.diversity

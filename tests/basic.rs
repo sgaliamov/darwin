@@ -3,7 +3,7 @@ mod sample;
 #[cfg(test)]
 mod tests {
     use super::sample;
-    use darwin::{Config, Context, GeneticAlgorithm, Individual, NoopCallback};
+    use darwin::{Config, Context, GeneticAlgorithm, Individual, NoopCallback, NoopCrossover};
     use itertools::Itertools;
     use sample::{DefaultCrossover, DefaultGenerator, DefaultMutator};
     use spectral::prelude::*;
@@ -11,6 +11,16 @@ mod tests {
     use std::sync::Mutex;
 
     type State<'a> = (&'a Config<i64>, Mutex<BufWriter<&'a mut Vec<u8>>>);
+    type SeedGa = GeneticAlgorithm<
+        i64,
+        (),
+        (),
+        fn(&Context<'_, i64, (), ()>) -> Vec<i64>,
+        SeedMutator,
+        NoopCrossover,
+        fn(&Individual<i64, ()>, &Context<'_, i64, (), ()>) -> (f64, Option<()>),
+        NoopCallback,
+    >;
 
     /// Fitness = ∑x² → 0 at the origin.
     fn sphere(ind: &Individual<i64, ()>, _ctx: &Context<'_, i64, State, ()>) -> (f64, Option<()>) {
@@ -189,6 +199,85 @@ mod tests {
         assert_that!(second_best).is_greater_than_or_equal_to(first_best);
     }
 
+    /// Seed mutation disabled keeps original seed untouched.
+    #[test]
+    fn constructor_keeps_original_seed_when_disabled() {
+        let config = Config {
+            pools: 1,
+            population_size: 4,
+            ranges: vec![vec![(0, 9); 2]],
+            seed: vec![vec![1, 2]],
+            ..Default::default()
+        };
+
+        let mut ga = seed_ga(config, SeedMutator::new(vec![vec![9, 9]]));
+        ga.seed();
+        let seeded = ga.pools()[0]
+            .individuals
+            .iter()
+            .map(|ind| ind.genome.clone())
+            .collect_vec();
+
+        assert_that!(seeded.len()).is_equal_to(1);
+        assert_that!(seeded.iter().any(|genome| genome == &vec![1, 2])).is_true();
+    }
+
+    /// Seed mutation enabled inserts unique mutants and excludes original seed.
+    #[test]
+    fn constructor_uses_unique_seed_mutants_only() {
+        let config = Config {
+            pools: 1,
+            population_size: 4,
+            ranges: vec![vec![(0, 9); 2]],
+            seed: vec![vec![1, 2]],
+            seed_mutation: 2,
+            ..Default::default()
+        };
+
+        let mut ga = seed_ga(
+            config,
+            SeedMutator::new(vec![vec![1, 2], vec![3, 4], vec![3, 4], vec![5, 6]]),
+        );
+        ga.set_state(());
+        ga.seed();
+        let genomes = ga.pools()[0]
+            .individuals
+            .iter()
+            .map(|ind| ind.genome.clone())
+            .collect_vec();
+
+        assert_that!(genomes).contains(vec![3, 4]);
+        assert_that!(genomes).contains(vec![5, 6]);
+        assert_that!(genomes.iter().filter(|g| **g == vec![1, 2]).count()).is_equal_to(0);
+    }
+
+    /// Multiple seeds dedup mutated results globally.
+    #[test]
+    fn constructor_dedups_seed_mutants_globally() {
+        let config = Config {
+            pools: 1,
+            population_size: 4,
+            ranges: vec![vec![(0, 9); 2]],
+            seed: vec![vec![1, 2], vec![7, 8]],
+            seed_mutation: 2,
+            ..Default::default()
+        };
+
+        let mut ga = seed_ga(
+            config,
+            SeedMutator::new(vec![vec![3, 4], vec![3, 4], vec![5, 6]]),
+        );
+        ga.set_state(());
+        ga.seed();
+        let genomes = ga.pools()[0]
+            .individuals
+            .iter()
+            .map(|ind| ind.genome.clone())
+            .collect_vec();
+
+        assert_that!(genomes.iter().filter(|g| **g == vec![3, 4]).count()).is_equal_to(1);
+    }
+
     /// noise_factor: diversity/stagnation pressure correctly scales mutation noise.
     #[test]
     fn noise_factor_with_stagnation() {
@@ -245,5 +334,40 @@ mod tests {
             .expect("expected some bests")
             .fitness
             <= 0.0001
+    }
+
+    fn seed_ga(config: Config<i64>, mutator: SeedMutator) -> SeedGa {
+        GeneticAlgorithm::new(
+            config,
+            seed_generator_one,
+            mutator,
+            NoopCrossover,
+            seed_eval,
+            NoopCallback,
+        )
+    }
+
+    fn seed_generator_one(_: &Context<'_, i64, (), ()>) -> Vec<i64> {
+        vec![9, 9]
+    }
+
+    fn seed_eval(ind: &Individual<i64, ()>, _: &Context<'_, i64, (), ()>) -> (f64, Option<()>) {
+        (ind.genome.iter().sum::<i64>() as f64, None)
+    }
+
+    struct SeedMutator {
+        genomes: Vec<Vec<i64>>,
+    }
+
+    impl SeedMutator {
+        fn new(genomes: Vec<Vec<i64>>) -> Self {
+            Self { genomes }
+        }
+    }
+
+    impl darwin::Mutator<i64, (), ()> for SeedMutator {
+        fn mutant(&self, _: &Individual<i64, ()>, _: &Context<'_, i64, (), ()>) -> Vec<Vec<i64>> {
+            self.genomes.clone()
+        }
     }
 }

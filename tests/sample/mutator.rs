@@ -22,13 +22,15 @@ where
     GaState: Sync,
 {
     /// Return a *mutated copy* of the given individual's genome.
-    /// Mutants that fall outside the allowed range are discarded (returns `None`).
+    /// Mutants that fall outside the allowed range are discarded (returns empty vec).
     fn mutant(
         &self,
         individual: &Individual<G, IndState>,
         ctx: &Context<'_, G, GaState, IndState>,
-    ) -> Option<Genome<G>> {
+    ) -> Vec<Genome<G>> {
         noisy_mutant(&self.ranges, individual, ctx, &mut rand::rng())
+            .into_iter()
+            .collect()
     }
 }
 
@@ -54,10 +56,10 @@ mod tests {
         let ind = Individual::firstborn(0, 0, genome.clone());
         let mut same = 0usize;
         for _ in 0..100 {
-            if let Some(m) = mutator.mutant(&ind, &ctx)
-                && m == genome
-            {
-                same += 1;
+            for m in mutator.mutant(&ind, &ctx) {
+                if m == genome {
+                    same += 1;
+                }
             }
         }
         assert_that!(same).is_greater_than(80);
@@ -78,7 +80,7 @@ mod tests {
         let ind = Individual::firstborn(0, 0, genome.clone());
         // mutants that land outside the range return None — verify any Some is in range
         for _ in 0..200 {
-            if let Some(m) = mutator.mutant(&ind, &ctx) {
+            for m in mutator.mutant(&ind, &ctx) {
                 assert!(m[0] >= 0 && m[0] <= 10, "mutant {} out of range", m[0]);
             }
         }

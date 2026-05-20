@@ -12,12 +12,12 @@ pub trait Generator<G: Gene, GaState, IndState>: Send + Sync {
 
 /// Produces mutated copies of a genome; must be `Send + Sync` for Rayon sharing.
 pub trait Mutator<G: Gene, GaState, IndState>: Send + Sync {
-    /// Return a mutated copy of `individual.genome`, or `None` if the result falls outside range.
+    /// Return zero or more mutated copies of `individual.genome`.
     fn mutant(
         &self,
         individual: &Individual<G, IndState>,
         ctx: &Context<'_, G, GaState, IndState>,
-    ) -> Option<Genome<G>>;
+    ) -> Vec<Genome<G>>;
 }
 
 /// Produces offspring from two parent genomes; must be `Send + Sync` for Rayon sharing.
@@ -64,7 +64,7 @@ where
 impl<G, GaState, IndState, F> Mutator<G, GaState, IndState> for F
 where
     G: Gene,
-    F: Fn(&Individual<G, IndState>, &Context<'_, G, GaState, IndState>) -> Option<Genome<G>>
+    F: Fn(&Individual<G, IndState>, &Context<'_, G, GaState, IndState>) -> Vec<Genome<G>>
         + Send
         + Sync,
 {
@@ -72,7 +72,7 @@ where
         &self,
         individual: &Individual<G, IndState>,
         ctx: &Context<'_, G, GaState, IndState>,
-    ) -> Option<Genome<G>> {
+    ) -> Vec<Genome<G>> {
         self(individual, ctx)
     }
 }
@@ -128,7 +128,7 @@ where
 // No-op implementations
 // ---------------------------------------------------------------------------
 
-/// No-op mutator; always returns `None`.
+/// No-op mutator; always returns empty vec.
 pub struct NoopMutator;
 
 impl<G: Gene, GaState, IndState> Mutator<G, GaState, IndState> for NoopMutator {
@@ -136,8 +136,8 @@ impl<G: Gene, GaState, IndState> Mutator<G, GaState, IndState> for NoopMutator {
         &self,
         _: &Individual<G, IndState>,
         _: &Context<'_, G, GaState, IndState>,
-    ) -> Option<Genome<G>> {
-        None
+    ) -> Vec<Genome<G>> {
+        vec![]
     }
 }
 

@@ -49,6 +49,9 @@ pub struct Config<G: Gene> {
     /// Predefined seed.
     pub seed: Vec<Genome<G>>,
 
+    /// Unique mutants to keep per seed before seeding pools. `0` keeps seeds unchanged.
+    pub seed_mutation: usize,
+
     /// Defines how children are distributed between parent's pools.
     /// 0 - all goes to dad, 1 - all goes to mom.
     pub migration_factor: f64,
@@ -79,6 +82,7 @@ impl<G: Gene> Default for Config<G> {
             tournament_size: 4,
             bests: 5,
             seed: Default::default(),
+            seed_mutation: 0,
             // moving all children to one parent pool allows to use seed safely,
             // as it won't affect other pools.
             // need to collect all linage to see how migration happen;
@@ -138,5 +142,16 @@ mod tests {
         .unwrap();
         assert_that!(config.seed).has_length(1);
         assert_that!(config.seed[0]).is_equal_to(vec![1i64, 2, 3]);
+    }
+
+    /// Seed mutation count deserializes from camelCase JSON.
+    #[test]
+    fn seed_mutation_deserializes_from_json() {
+        let config: Config<i64> = serde_json::from_value(json!({
+            "seedMutation": 7
+        }))
+        .unwrap();
+
+        assert_that!(config.seed_mutation).is_equal_to(7);
     }
 }
