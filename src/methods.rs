@@ -105,6 +105,8 @@ where
 
         let ctx = Context::new(&gen_info, &self.state, &self.pools);
         let mut seeds = Vec::new();
+        let max_seed_attempts =
+            self.config.seed_mutation.max(1) * self.config.population_size.max(1);
 
         for genome in self.config.seed.iter().cloned() {
             Self::assert_seed_len(&genome, genome_len);
@@ -118,23 +120,25 @@ where
 
             let individual = Individual::<G, IndState>::firstborn(0, 0, genome.clone());
 
-            let mutants = self
-                .mutator
-                .mutant(&individual, &ctx)
-                .into_iter()
-                .filter(|mutant| mutant != &genome)
-                .filter_map(|mutant| {
-                    if seeds.contains(&mutant) {
-                        return None;
+            let mut accepted = 0;
+            for _ in 0..max_seed_attempts {
+                for mutant in self.mutator.mutant(&individual, &ctx) {
+                    if mutant == genome || seeds.contains(&mutant) {
+                        continue;
                     }
 
                     seeds.push(mutant);
-                    Some(true)
-                })
-                .take(self.config.seed_mutation)
-                .collect_vec();
+                    accepted += 1;
 
-            drop(mutants);
+                    if accepted == self.config.seed_mutation {
+                        break;
+                    }
+                }
+
+                if accepted == self.config.seed_mutation {
+                    break;
+                }
+            }
         }
 
         self.reseed(seeds);
