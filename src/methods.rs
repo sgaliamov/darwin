@@ -118,7 +118,8 @@ where
 
             let individual = Individual::<G, IndState>::firstborn(0, 0, genome.clone());
 
-            let mutants = self.mutator
+            let mutants = self
+                .mutator
                 .mutant(&individual, &ctx)
                 .into_iter()
                 .filter(|mutant| mutant != &genome)
@@ -394,9 +395,7 @@ where
 
     /// Replace current pool seeds with provided genomes and refresh diversity.
     fn reseed(&mut self, seed_genomes: Vec<Vec<G>>) {
-        self.pools
-            .iter_mut()
-            .for_each(|pool| pool.individuals.clear());
+        self.pools.iter_mut().for_each(Pool::clean);
 
         for (i, genome) in seed_genomes.into_iter().enumerate() {
             let pool_idx = i % self.pools.len();
