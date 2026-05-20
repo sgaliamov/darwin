@@ -6,7 +6,9 @@ use itertools::Itertools;
 use rand::prelude::*;
 use rand_distr::Normal;
 use rayon::prelude::*;
+use rustc_hash::FxHashSet;
 use std::any::TypeId;
+use std::hash::Hash;
 
 impl<G, GaState, IndState, Gen, M, C, Sc, Cb>
     GeneticAlgorithm<G, GaState, IndState, Gen, M, C, Sc, Cb>
@@ -84,6 +86,7 @@ where
     pub fn seed(&mut self)
     where
         GaState: Clone,
+        G: Hash,
     {
         if self.config.seed.is_empty() {
             return;
@@ -104,41 +107,17 @@ where
         };
 
         let ctx = Context::new(&gen_info, &self.state, &self.pools);
-        let mut seeds = Vec::new();
-        let max_seed_attempts =
-            self.config.seed_mutation.max(1) * self.config.population_size.max(1);
+        let mut seeds = FxHashSet::default();
 
         for genome in self.config.seed.iter().cloned() {
             Self::assert_seed_len(&genome, genome_len);
 
             if self.config.seed_mutation == 0 {
-                if !seeds.contains(&genome) {
-                    seeds.push(genome);
-                }
+                seeds.insert(genome);
                 continue;
             }
 
-            let individual = Individual::<G, IndState>::firstborn(0, 0, genome.clone());
-
-            let mut accepted = 0;
-            for _ in 0..max_seed_attempts {
-                for mutant in self.mutator.mutant(&individual, &ctx) {
-                    if mutant == genome || seeds.contains(&mutant) {
-                        continue;
-                    }
-
-                    seeds.push(mutant);
-                    accepted += 1;
-
-                    if accepted == self.config.seed_mutation {
-                        break;
-                    }
-                }
-
-                if accepted == self.config.seed_mutation {
-                    break;
-                }
-            }
+            self.extend_unique_seed_mutants(&mut seeds, genome, &ctx);
         }
 
         self.reseed(seeds);
@@ -399,7 +378,7 @@ where
     }
 
     /// Replace current pool seeds with provided genomes and refresh diversity.
-    fn reseed(&mut self, seed_genomes: Vec<Vec<G>>) {
+    fn reseed(&mut self, seed_genomes: impl IntoIterator<Item = Vec<G>>) {
         self.pools.iter_mut().for_each(Pool::clean);
 
         for (i, genome) in seed_genomes.into_iter().enumerate() {
@@ -415,6 +394,42 @@ where
             .for_each(|p| {
                 p.calc_diversity(&self.flat_genome_ranges);
             });
+    }
+
+    /// Collect unique mutants for a single seed, retrying bounded times.
+    fn extend_unique_seed_mutants(
+        &self,
+        seeds: &mut FxHashSet<Vec<G>>,
+        genome: Vec<G>,
+        ctx: &Context<'_, G, GaState, IndState>,
+    ) where
+        G: Hash,
+    {
+        let individual = Individual::<G, IndState>::firstborn(0, 0, genome.clone());
+        let target = self.config.seed_mutation;
+        let max_attempts = target.max(1) * self.config.population_size.max(1);
+        let mut accepted = 0;
+
+        for _ in 0..max_attempts {
+            let mut progress = false;
+
+            for mutant in self.mutator.mutant(&individual, ctx) {
+                if mutant == genome || !seeds.insert(mutant) {
+                    continue;
+                }
+
+                accepted += 1;
+                progress = true;
+
+                if accepted == target {
+                    return;
+                }
+            }
+
+            if !progress {
+                break;
+            }
+        }
     }
 
     /// Seed genomes must match flattened ranges.
