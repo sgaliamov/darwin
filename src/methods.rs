@@ -85,30 +85,30 @@ where
     where
         GaState: Clone,
     {
-        let config: &Config<G> = &self.config;
-        let mutator = self.state.as_ref().map(|_| &self.mutator);
-        let pools: &Pools<G, IndState> = &self.pools;
         let genome_len = self.flat_genome_ranges.len();
 
-        if config.seed.is_empty() {
+        if self.config.seed.is_empty() {
             return;
         }
 
         let gen_info = GenInfo {
             generation: 0,
             stagnation: 0.0,
-            distribution: Normal::new(0.0_f32, config.sigma.get(0, config.max_generation))
-                .expect("`sigma` must be positive"),
+            distribution: Normal::new(
+                0.0_f32,
+                self.config.sigma.get(0, self.config.max_generation),
+            )
+            .expect("`sigma` must be positive"),
         };
 
-        let ctx = Context::new(&gen_info, &self.state, pools);
+        let ctx = Context::new(&gen_info, &self.state, &self.pools);
         let mut accepted = Vec::new();
         let mut seeds = Vec::new();
 
-        for genome in config.seed.iter().cloned() {
+        for genome in self.config.seed.iter().cloned() {
             Self::assert_seed_len(&genome, genome_len);
 
-            if config.seed_mutation == 0 {
+            if self.config.seed_mutation == 0 {
                 if !accepted.contains(&genome) {
                     accepted.push(genome.clone());
                     seeds.push(genome);
@@ -116,22 +116,13 @@ where
                 continue;
             }
 
-            let Some(mutator) = mutator else {
-                if !accepted.contains(&genome) {
-                    accepted.push(genome.clone());
-                    seeds.push(genome);
-                }
-                continue;
-            };
-
             let individual = Individual::<G, IndState>::firstborn(0, 0, genome.clone());
 
-            let mutants = mutator
+            let mutants = self.mutator
                 .mutant(&individual, &ctx)
                 .into_iter()
                 .filter(|mutant| mutant != &genome)
                 .filter(|mutant| {
-                    Self::assert_seed_len(mutant, genome_len);
                     if accepted.contains(mutant) {
                         return false;
                     }
@@ -139,7 +130,7 @@ where
                     accepted.push(mutant.clone());
                     true
                 })
-                .take(config.seed_mutation);
+                .take(self.config.seed_mutation);
 
             seeds.extend(mutants);
         }
