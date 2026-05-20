@@ -85,20 +85,22 @@ where
     where
         GaState: Clone,
     {
-        let genome_len = self.flat_genome_ranges.len();
-
         if self.config.seed.is_empty() {
             return;
         }
 
+        let genome_len = self.flat_genome_ranges.len();
+
+        let distribution = Normal::new(
+            0.0_f32,
+            self.config.sigma.get(0, self.config.max_generation),
+        )
+        .expect("`sigma` must be positive");
+
         let gen_info = GenInfo {
             generation: 0,
             stagnation: 0.0,
-            distribution: Normal::new(
-                0.0_f32,
-                self.config.sigma.get(0, self.config.max_generation),
-            )
-            .expect("`sigma` must be positive"),
+            distribution,
         };
 
         let ctx = Context::new(&gen_info, &self.state, &self.pools);
