@@ -104,15 +104,13 @@ where
         };
 
         let ctx = Context::new(&gen_info, &self.state, &self.pools);
-        let mut accepted = Vec::new();
         let mut seeds = Vec::new();
 
         for genome in self.config.seed.iter().cloned() {
             Self::assert_seed_len(&genome, genome_len);
 
             if self.config.seed_mutation == 0 {
-                if !accepted.contains(&genome) {
-                    accepted.push(genome.clone());
+                if !seeds.contains(&genome) {
                     seeds.push(genome);
                 }
                 continue;
@@ -125,17 +123,18 @@ where
                 .mutant(&individual, &ctx)
                 .into_iter()
                 .filter(|mutant| mutant != &genome)
-                .filter(|mutant| {
-                    if accepted.contains(mutant) {
-                        return false;
+                .filter_map(|mutant| {
+                    if seeds.contains(&mutant) {
+                        return None;
                     }
 
-                    accepted.push(mutant.clone());
-                    true
+                    seeds.push(mutant);
+                    Some(true)
                 })
-                .take(self.config.seed_mutation);
+                .take(self.config.seed_mutation)
+                .collect_vec();
 
-            seeds.extend(mutants);
+            drop(mutants);
         }
 
         self.reseed(seeds);
