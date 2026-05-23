@@ -154,7 +154,7 @@ where
             self.random(&gen_info);
             self.evaluate_generation(&gen_info);
 
-            let best_fitness = self.pools.best().map(|(_, f)| f);
+            let best_fitness = self.pools.best().map(|ind| ind.fitness);
             let improved = best_fitness.is_some_and(|f| f > self.best_fitness);
 
             if improved {
