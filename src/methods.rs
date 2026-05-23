@@ -378,10 +378,10 @@ where
     }
 
     /// Replace current pool seeds with provided genomes and refresh diversity.
-    fn reseed(&mut self, seed_genomes: impl IntoIterator<Item = Vec<G>>) {
+    fn reseed(&mut self, genomes: impl IntoIterator<Item = Vec<G>>) {
         self.pools.iter_mut().for_each(Pool::clean);
 
-        for (i, genome) in seed_genomes.into_iter().enumerate() {
+        for (i, genome) in genomes.into_iter().enumerate() {
             let pool_idx = i % self.pools.len();
             self.pools[pool_idx]
                 .individuals
