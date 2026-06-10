@@ -149,7 +149,8 @@ where
     /// Callers can extract top individuals using [`Pools::top_individuals`].
     /// Pools are preserved between runs to allow reusing individuals in subsequent iterations.
     /// When the callback aborts the run, top genomes are dumped to `config.dump` (if set)
-    /// for a later resume via [`seed`](Self::seed); a natural finish removes the dump.
+    /// for a later resume via [`seed`](Self::seed); a natural finish removes the dump,
+    /// or refreshes it when `config.keep_dump` is set.
     pub fn run(&mut self) -> &mut Pools<G, IndState>
     where
         G: Serialize,
@@ -196,9 +197,14 @@ where
             }
         }
 
-        // A finished run invalidates any previous dump.
+        // A finished run invalidates any previous dump,
+        // unless `keep_dump` asks to stay resumable.
         if !aborted {
-            self.clear_dump();
+            if self.config.keep_dump {
+                self.dump();
+            } else {
+                self.clear_dump();
+            }
         }
 
         // Return reference to pools; caller can extract top individuals if needed.

@@ -66,6 +66,10 @@ pub struct Config<G: Gene> {
 
     /// Top fraction of each pool persisted to the dump file (min 1 per pool).
     pub dump_ratio: f32,
+
+    /// When `true`, a natural finish overwrites the dump with the final state
+    /// instead of removing it, keeping the run always resumable.
+    pub keep_dump: bool,
 }
 
 impl<G: Gene> Config<G> {
@@ -98,6 +102,7 @@ impl<G: Gene> Default for Config<G> {
             sigma: Sigma::default(),
             dump: None,
             dump_ratio: 0.05,
+            keep_dump: false,
         }
     }
 }

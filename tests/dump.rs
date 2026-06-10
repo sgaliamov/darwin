@@ -112,6 +112,23 @@ mod tests {
         assert_that!(dump.path().exists()).is_false();
     }
 
+    /// `keep_dump` → natural finish overwrites the dump with the final state.
+    #[test]
+    fn keep_dump_refreshes_on_finish() {
+        let dump = TempDump::new("keep");
+        save_dump(dump.path(), &[vec![1i64, 2, 3, 4]]).unwrap();
+
+        let mut cfg = config(&dump);
+        cfg.max_generation = 2;
+        cfg.keep_dump = true;
+        let mut ga = build_ga(cfg, NoopCallback);
+        ga.run();
+
+        let genomes = load_dump::<i64>(dump.path(), 4).expect("dump must survive finish");
+        // 3 pools × ceil(20 × 0.1) = 6 genomes — final state, not the stale single genome.
+        assert_that!(genomes.len()).is_equal_to(6);
+    }
+
     /// Existing dump wins over `config.seed` and lands in pools as-is.
     #[test]
     fn seed_resumes_from_dump() {
