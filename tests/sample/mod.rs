@@ -1,9 +1,13 @@
 mod crossover;
 mod generator;
 mod mutator;
-pub use crossover::*;
 use darwin::{Context, Gene, GeneRangesRef, Genome, Individual};
+// Each integration test compiles this module separately and uses a subset of items.
+#[allow(unused_imports)]
+pub use crossover::*;
+#[allow(unused_imports)]
 pub use generator::*;
+#[allow(unused_imports)]
 pub use mutator::*;
 use rand_distr::Distribution;
 use std::ops::Add;

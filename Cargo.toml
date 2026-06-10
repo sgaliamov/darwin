@@ -10,6 +10,7 @@ keywords = ["genetic-algorithm", "evolutionary", "optimization"]
 categories = ["algorithms", "science"]
 
 [dependencies]
+bincode = {version = "2", features = ["serde"]}# Binary serialization for dumps.
 itertools = "0.14.0" # Itertools library.
 rand = "0.10.1" # Randomness.
 rand_distr = "0.6.0" # Normal distribution.

@@ -1,5 +1,6 @@
 use crate::{Gene, Genome, RangeSet, Sigma};
 use serde::Deserialize;
+use std::path::PathBuf;
 
 /// Generic settings for any genetic algorithms.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -58,6 +59,13 @@ pub struct Config<G: Gene> {
 
     /// Sigma annealing schedule; shared across all operators.
     pub sigma: Sigma,
+
+    /// Binary dump file written on abort and consumed by [`seed`](crate::GeneticAlgorithm::seed)
+    /// on the next run. `None` disables dumping.
+    pub dump: Option<PathBuf>,
+
+    /// Top fraction of each pool persisted to the dump file (min 1 per pool).
+    pub dump_ratio: f32,
 }
 
 impl<G: Gene> Config<G> {
@@ -88,6 +96,8 @@ impl<G: Gene> Default for Config<G> {
             // need to collect all linage to see how migration happen;
             migration_factor: 0.000_000_1,
             sigma: Sigma::default(),
+            dump: None,
+            dump_ratio: 0.05,
         }
     }
 }
