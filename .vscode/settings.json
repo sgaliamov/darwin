@@ -1,3 +1,11 @@
 {
-  "cSpell.words": ["darwin", "impls", "powi", "println", "livetime", "unscored"]
+  "cSpell.words": [
+    "bincode",
+    "darwin",
+    "impls",
+    "powi",
+    "println",
+    "livetime",
+    "unscored"
+  ]
 }

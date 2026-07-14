@@ -1,12 +1,13 @@
 use crate::{
     Callback, Config, Context, Crossover, Evaluator, GenInfo, Gene, Generator, GeneticAlgorithm,
-    Individual, Lineage, Mutator, NoopCrossover, Pool, Pools,
+    Individual, Lineage, Mutator, NoopCrossover, Pool, Pools, load_dump, save_dump,
 };
 use itertools::Itertools;
 use rand::prelude::*;
 use rand_distr::Normal;
 use rayon::prelude::*;
 use rustc_hash::FxHashSet;
+use serde::{Serialize, de::DeserializeOwned};
 use std::any::TypeId;
 use std::hash::Hash;
 
@@ -37,6 +38,10 @@ where
         assert!(config.pools >= 1, "Need at least one pool");
         assert!(!config.ranges.is_empty(), "At least one gene is required");
         assert!(config.population_size >= 4, "Population too small");
+        assert!(
+            (0.0..=1.0).contains(&config.dump_ratio),
+            "dump_ratio must be in [0, 1]"
+        );
 
         let pools = Pools::from_vec(
             (0..config.pools)
@@ -83,16 +88,28 @@ where
     }
 
     /// Seed pools from configured genomes, optionally using state-aware mutation.
+    /// A dump file left by an aborted [`run`](Self::run) takes priority over `config.seed`
+    /// and is inserted as-is (no seed mutation).
     pub fn seed(&mut self)
     where
         GaState: Clone,
-        G: Hash,
+        G: Hash + DeserializeOwned,
     {
-        if self.config.seed.is_empty() {
+        let genome_len = self.flat_genome_ranges.len();
+
+        if let Some(genomes) = self
+            .config
+            .dump
+            .as_deref()
+            .and_then(|path| load_dump(path, genome_len))
+        {
+            self.reseed(genomes.into_iter().collect::<FxHashSet<_>>());
             return;
         }
 
-        let genome_len = self.flat_genome_ranges.len();
+        if self.config.seed.is_empty() {
+            return;
+        }
 
         let distribution = Normal::new(
             0.0_f32,
@@ -131,8 +148,15 @@ where
     /// Run the evolutionary loop and return a mutable reference to all pools.
     /// Callers can extract top individuals using [`Pools::top_individuals`].
     /// Pools are preserved between runs to allow reusing individuals in subsequent iterations.
-    pub fn run(&mut self) -> &mut Pools<G, IndState> {
+    /// When the callback aborts the run, top genomes are dumped to `config.dump` (if set)
+    /// for a later resume via [`seed`](Self::seed); a natural finish removes the dump,
+    /// or refreshes it when `config.keep_dump` is set.
+    pub fn run(&mut self) -> &mut Pools<G, IndState>
+    where
+        G: Serialize,
+    {
         self.reset();
+        let mut aborted = false;
 
         for generation in 0..=self.config.max_generation {
             let stagnation =
@@ -154,7 +178,7 @@ where
             self.random(&gen_info);
             self.evaluate_generation(&gen_info);
 
-            let best_fitness = self.pools.best().map(|(_, f)| f);
+            let best_fitness = self.pools.best().map(|ind| ind.fitness);
             let improved = best_fitness.is_some_and(|f| f > self.best_fitness);
 
             if improved {
@@ -163,11 +187,23 @@ where
 
             let ctx = Context::new(&gen_info, &self.state, &self.pools);
             if !self.callback.call(&ctx) {
+                aborted = true;
+                self.dump();
                 break;
             }
 
             if self.stagnation(improved) {
                 break;
+            }
+        }
+
+        // A finished run invalidates any previous dump,
+        // unless `keep_dump` asks to stay resumable.
+        if !aborted {
+            if self.config.keep_dump {
+                self.dump();
+            } else {
+                self.clear_dump();
             }
         }
 
@@ -378,10 +414,10 @@ where
     }
 
     /// Replace current pool seeds with provided genomes and refresh diversity.
-    fn reseed(&mut self, seed_genomes: impl IntoIterator<Item = Vec<G>>) {
+    fn reseed(&mut self, genomes: impl IntoIterator<Item = Vec<G>>) {
         self.pools.iter_mut().for_each(Pool::clean);
 
-        for (i, genome) in seed_genomes.into_iter().enumerate() {
+        for (i, genome) in genomes.into_iter().enumerate() {
             let pool_idx = i % self.pools.len();
             self.pools[pool_idx]
                 .individuals
@@ -394,6 +430,43 @@ where
             .for_each(|p| {
                 p.calc_diversity(&self.flat_genome_ranges);
             });
+    }
+
+    /// Persist top `dump_ratio` genomes of every pool to `config.dump`, if set.
+    /// Pools are sorted descending after evaluation, so a prefix is the elite.
+    fn dump(&self)
+    where
+        G: Serialize,
+    {
+        let Some(path) = self.config.dump.as_deref() else {
+            return;
+        };
+
+        let genomes = self
+            .pools
+            .iter()
+            .filter(|pool| !pool.individuals.is_empty())
+            .flat_map(|pool| {
+                let count =
+                    (pool.individuals.len() as f32 * self.config.dump_ratio).ceil() as usize;
+                pool.individuals[..count.max(1)]
+                    .iter()
+                    .map(|ind| ind.genome.clone())
+            })
+            .collect_vec();
+
+        if let Err(e) = save_dump(path, &genomes) {
+            eprintln!("Failed to write dump {}: {e}", path.display());
+        }
+    }
+
+    /// Remove a stale dump file after a natural finish.
+    fn clear_dump(&self) {
+        if let Some(path) = self.config.dump.as_deref()
+            && path.exists()
+        {
+            let _ = std::fs::remove_file(path);
+        }
     }
 
     /// Collect unique mutants for a single seed, retrying bounded times.

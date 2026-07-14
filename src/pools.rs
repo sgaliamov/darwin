@@ -108,21 +108,19 @@ impl<G, IndState> Pools<G, IndState> {
     }
 
     /// Top `n` individuals across all pools sorted best-first.
-    pub fn best_n(&self, n: usize) -> Vec<(&Genome<G>, f64)>
+    pub fn best_n(&self, n: usize) -> Vec<&Individual<G, IndState>>
     where
         G: Gene,
     {
         self.iter()
-            .flat_map(|pool| pool.individuals.iter())
-            .filter(|ind| ind.fitness.is_finite())
+            .flat_map(|pool| pool.best_n(n))
             .sorted_by(|a, b| b.fitness.total_cmp(&a.fitness))
             .take(n)
-            .map(|ind| (&ind.genome, ind.fitness))
             .collect()
     }
 
     /// Best individual across all pools. Returns `None` if all pools are empty.
-    pub fn best(&self) -> Option<(&Genome<G>, f64)>
+    pub fn best(&self) -> Option<&Individual<G, IndState>>
     where
         G: Gene,
     {
@@ -136,7 +134,7 @@ mod tests {
     use crate::Individual;
     use spectral::prelude::*;
 
-    fn make_pools(fitness_per_pool: &[&[f64]]) -> Pools<(), ()> {
+    fn make_pools(fitness_per_pool: &[&[f64]]) -> Pools<i64, ()> {
         let pools = fitness_per_pool
             .iter()
             .enumerate()
@@ -144,7 +142,7 @@ mod tests {
                 let individuals = fitnesses
                     .iter()
                     .map(|&f| {
-                        let mut ind = Individual::<(), ()>::firstborn(i, 0, vec![]);
+                        let mut ind = Individual::<i64, ()>::firstborn(i, 0, vec![]);
                         ind.fitness = f;
                         ind
                     })
@@ -161,6 +159,17 @@ mod tests {
         let mut pools = make_pools(&[&[1.0, 3.0], &[2.0, 4.0]]);
         let top = pools.top_individuals_mut(3);
         let fitnesses: Vec<f64> = top.iter().map(|i| i.fitness).collect();
+        assert_that!(fitnesses).is_equal_to(vec![4.0, 3.0, 2.0]);
+    }
+
+    #[test]
+    fn best_n_returns_sorted_best_first() {
+        let pools = make_pools(&[&[1.0, 3.0], &[2.0, 4.0]]);
+        let fitnesses = pools
+            .best_n(3)
+            .into_iter()
+            .map(|i| i.fitness)
+            .collect::<Vec<_>>();
         assert_that!(fitnesses).is_equal_to(vec![4.0, 3.0, 2.0]);
     }
 

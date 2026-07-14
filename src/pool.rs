@@ -1,4 +1,5 @@
 use crate::{Gene, GeneRangesRef, Individual};
+use itertools::Itertools;
 use rand::{Rng, seq::IteratorRandom};
 use std::cmp::Ordering;
 
@@ -66,6 +67,16 @@ impl<G: Gene, State> Pool<G, State> {
             .sample(rng, k)
             .into_iter()
             .max_by(|a, b| a.fitness.total_cmp(&b.fitness))
+    }
+
+    /// Top `n` individuals in this pool sorted best-first.
+    pub fn best_n(&self, n: usize) -> Vec<&Individual<G, State>> {
+        self.individuals
+            .iter()
+            .filter(|ind| ind.fitness.is_finite())
+            .sorted_by(|a, b| b.fitness.total_cmp(&a.fitness))
+            .take(n)
+            .collect()
     }
 
     /// Average variance over loci.
@@ -272,6 +283,26 @@ mod tests {
 
         assert_that!(pool.individuals).has_length(1);
         assert_that!(pool.individuals[0].fitness).is_equal_to(1.0);
+    }
+
+    #[test]
+    fn best_n_returns_best_first() {
+        let ranges = &[(0, 1_000); 1];
+        let mut a = Individual::<_, ()>::firstborn(0, 0, random_genome(ranges));
+        let mut b = Individual::<_, ()>::firstborn(0, 0, random_genome(ranges));
+        let mut c = Individual::<_, ()>::firstborn(0, 0, random_genome(ranges));
+        a.fitness = 1.0;
+        b.fitness = 3.0;
+        c.fitness = 2.0;
+
+        let pool = Pool::new(0, vec![a, b, c]);
+        let fitnesses = pool
+            .best_n(2)
+            .into_iter()
+            .map(|ind| ind.fitness)
+            .collect_vec();
+
+        assert_that!(fitnesses).is_equal_to(vec![3.0, 2.0]);
     }
 
     fn random_genome(ranges: &[(i64, i64)]) -> Vec<i64> {
